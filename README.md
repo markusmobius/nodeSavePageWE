@@ -1,6 +1,4 @@
 # nodeSavePageWE
-Fork of SavePageWE Chrome Extension adapted for Node.js plus Puppeteer: converts a website into a self-contained single html file
-
 This is a fork of the SavePageWE Chrome/Firefox extension by DW-dev. 
 
 It allows you to convert a website into a single, self-contained HTML that embeds most of the required resources. It uses puppeteer as a headless Chrome browser on the backend. 
