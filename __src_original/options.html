@@ -1,0 +1,490 @@
+﻿<html>
+    
+    <head>
+        
+        <meta charset="utf-8"/>
+
+<!--
+/************************************************************************/
+/*                                                                      */
+/*      Save Page WE - Generic WebExtension - Options Page              */
+/*                                                                      */
+/*      HTML and CSS for Options Page                                   */
+/*                                                                      */
+/*      Last Edit - 08 Nov 2018                                         */
+/*                                                                      */
+/*      Copyright (C) 2016-2018 DW-dev                                  */
+/*                                                                      */
+/*      Distributed under the GNU General Public License version 2      */
+/*      See LICENCE.txt file and http://www.gnu.org/licenses/           */
+/*                                                                      */
+/************************************************************************/
+-->
+
+        <title>Save Page WE Options</title>
+        
+        <script src="options.js"></script>
+        
+        <style>
+            
+            /* Chrome - maximum height to avoid scrolling is 531px */
+            
+            body
+            {
+                display: flex;
+                background-color: #F0F0F0;
+            }
+            
+            #options
+            {
+                min-width: 337px;
+                margin: auto;
+                padding: 5px;
+                border: 1px solid #808080;
+                font-family: "Segoe UI","Helvetica Neue",Ubuntu,Arial;
+                font-size: 12px;
+                background-color: white;
+            }
+            
+            #options *
+            {
+                font-family: "Segoe UI","Helvetica Neue",Ubuntu,Arial;
+                font-size: 12px;
+            }
+            
+            #options-title
+            {
+                font-size: 16px;
+                margin-bottom: 7px;
+            }
+            
+            #options-tabbar
+            {
+                margin: 0px 3px 4px 2px;
+                padding: 1px 1px 1px 2px;
+                border: 1px solid #C0C0C0;
+            }
+            
+            #options-tabbar button
+            {
+                display: inline-block;
+                margin: 0px -1px;
+                padding: 1px 6px;
+                background-color: #E0E0E0;
+                border: 1px solid #C0C0C0;
+                cursor: pointer;
+            }
+            
+            #options-tabbar button:not([selected]):hover
+            {
+                background-color: #F0F0F0;
+            }
+            
+            #options-tabbar button:not([selected]):active
+            {
+                background-color: #FFFFFF;
+            }
+            
+            #options-tabbar button[selected]
+            {
+                background-color: #FFFFFF;
+            }
+            
+            #options-tab-general,
+            #options-tab-saveditems,
+            #options-tab-advanced,
+            #options-tab-shortcuts
+            {
+                /* display: block; - selected tab */
+                /* display: none; - other tabs */
+            }
+            
+            form
+            {
+                margin-bottom: 3px;
+            }
+            
+            fieldset > div
+            {
+                margin-bottom: 5px;
+            }
+            
+            fieldset > div:last-child
+            {
+                margin-bottom: 0px;
+            }
+            
+            fieldset input[type="checkbox"]
+            {
+                margin-right: 7px;
+                vertical-align: 0px;
+            }
+            
+            fieldset input[type="radio"]
+            {
+                margin-left: 4px;
+                margin-right: 7px;
+                vertical-align: 0px;
+            }
+            
+            fieldset input[type="text"]
+            {
+                margin-left: 8px;
+                padding: 1px 3px 1px 3px;
+                vertical-align: 2px;
+            }
+            
+            fieldset input[type="number"]
+            {
+                width: 4em;
+                margin-left: 4px;
+                margin-right: 8px;
+                padding: 1px 0px 1px 3px;
+                text-align: center;
+                vertical-align: 2px;
+            }
+            
+            fieldset label
+            {
+                vertical-align: 2px;
+            }
+            
+            fieldset label:first-child
+            {
+                margin-left: 3px;
+            }
+            
+            #options-savedfilename
+            {
+                width: 25em;
+                margin-left: 4px;
+            }
+            
+            #options-replacechar
+            {
+                width: 2em;
+                text-align: center;
+            }
+            
+            #options-maxframedepth,
+            #options-maxresourcesize
+            {
+                margin-bottom: 3px;
+            }
+            
+            #options-refererheader label:first-child
+            {
+                margin-left: 4px;
+            }
+            
+            #options-availablekeys div
+            {
+                margin-left: 3px;
+                color: #606060;
+            }
+            
+            #options-configureshortcuts label
+            {
+                display: inline-block;
+                width: 11em;
+            }
+            
+            #options-configureshortcuts input
+            {
+                width: 13em;
+            }
+            
+            #options-save
+            {
+                display: flex;
+                margin-top: 10px;
+            }
+            
+            #options-save-button,
+            #options-resetall-button
+            {
+                width: 6em;
+                margin-left: 2px;
+                margin-right: 10px;
+                margin-bottom: 2px;
+                padding-top: 1px;
+                padding-bottom: 1px;
+                text-align: center;
+            }
+            
+            #options-spacer
+            {
+                flex: 1;
+            }
+            
+            /* Enable Shortcuts in Firefox 60+ */
+            
+            body:not([shortcuts]) #options-tabbar-shortcuts
+            {
+                display: none;
+            }
+            
+        </style>
+        
+    </head>
+    
+    <body>
+        
+        <div id="options">
+            
+            <div>
+                
+                <div id="options-title">Save Page WE Options</div>
+                
+                <div id="options-tabbar">
+                    <button id="options-tabbar-general">General</button>
+                    <button id="options-tabbar-saveditems">Saved Items</button>
+                    <button id="options-tabbar-advanced">Advanced</button>
+                    <button id="options-tabbar-shortcuts">Shortcuts</button>
+                </div>
+                
+                <div id="options-tabs">
+                    
+                    <div id="options-tab-general">
+                    
+                        <form id="options-buttonaction">
+                            <fieldset>
+                                <legend>&nbsp;Button Action&nbsp;</legend>
+                                <div>
+                                    <input id="options-basicitems" type="radio" name="action" value="0"/><label for="options-basicitems">Save Basic Items</label>
+                                </div>
+                                <div>
+                                    <input id="options-chosenitems" type="radio" name="action" value="1"/><label for="options-chosenitems">Save Chosen Items</label>
+                                </div>
+                                <div>
+                                    <input id="options-standarditems" type="radio" name="action" value="2"/><label for="options-standarditems">Save Standard Items</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;User Interface&nbsp;</legend>
+                                <div>
+                                    <input id="options-showsubmenu" type="checkbox"/><label for="options-showsubmenu">Show add-on submenu on context menu</label>
+                                </div>
+                                <div>
+                                    <input id="options-showwarning" type="checkbox"/><label for="options-showwarning">Show warning if any resources cannot be saved</label>
+                                </div>
+                                <div>
+                                    <input id="options-showurllist" type="checkbox"/><label for="options-showurllist">Show list of all resources that cannot be saved</label>
+                                </div>
+                                <div>
+                                    <input id="options-promptcomments" type="checkbox"/><label for="options-promptcomments">Prompt to enter comments when saving file</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Save Features&nbsp;</legend>
+                                <div>
+                                    <input id="options-usepageloader" type="checkbox"/><label for="options-usepageloader">Use page loader to reduce saved file size</label>
+                                </div>
+                                <div>
+                                    <input id="options-retaincrossframes" type="checkbox"/><label for="options-retaincrossframes">Retain cross-origin frames and iframes</label>
+                                </div>
+                                <div>
+                                    <input id="options-removeunsavedurls" type="checkbox"/><label for="options-removeunsavedurls">Remove URLs of all unsaved resources</label>
+                                </div>
+                                <div>
+                                    <input id="options-includeinfobar" type="checkbox"/><label for="options-includeinfobar">Include information bar at top of page</label>
+                                </div>
+                                <div>
+                                    <input id="options-includesummary" type="checkbox"/><label for="options-includesummary">Include metrics and resource summary</label>
+                                </div>
+                                <div>
+                                    <input id="options-formathtml" type="checkbox"/><label for="options-formathtml">Format HTML source code in saved file</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Saved File Name&nbsp;</legend>
+                                <div>
+                                    <input id="options-savedfilename" type="text" value="%TITLE%" placeholder="Enter file name  -  Hover for list of predefined fields" title="Predefined fields:&#10;%TITLE% %DATE% %TIME%&#10;%HOST% %PATH% %FILE%"/>
+                                </div>
+                                <div>
+                                    <input id="options-replacespaces" type="checkbox"/><label for="options-replacespaces">Replace spaces in file name with:</label>
+                                    <input id="options-replacechar" type="text" value="-" maxlength="1"/>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                    </div>
+                    
+                    <div id="options-tab-saveditems">
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Basic Items&nbsp;</legend>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label>HTML elements</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label>HTML image files (currently displayed)</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label>CSS style sheets</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label>CSS image files (currently displayed)</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label>CSS fonts files (used by this browser)</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Standard Items - also includes Basic Items&nbsp;</legend>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label for="options-savehtmlimagesall">HTML image files (all)</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label for="options-savehtmlaudiovideo">HTML audio & video files</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label for="options-savehtmlobjectembed">HTML object & embed files</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" checked disabled /><label for="options-savecssfontswoff">CSS font files (woff for any browser)</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Chosen Items - also includes Basic Items&nbsp;</legend>
+                                <div>
+                                    <input id="options-savehtmlimagesall" type="checkbox"/><label for="options-savehtmlimagesall">HTML image files (all)</label>
+                                </div>
+                                <div>
+                                    <input id="options-savehtmlaudiovideo" type="checkbox"/><label for="options-savehtmlaudiovideo">HTML audio & video files</label>
+                                </div>
+                                <div>
+                                    <input id="options-savehtmlobjectembed" type="checkbox"/><label for="options-savehtmlobjectembed">HTML object & embed files</label>
+                                </div>
+                                <div>
+                                    <input id="options-savecssimagesall" type="checkbox"/><label for="options-savecssimagesall">CSS image files (all)</label>
+                                </div>
+                                <div>
+                                    <input id="options-savecssfontswoff" type="checkbox"/><label for="options-savecssfontswoff">CSS font files (woff for any browser)</label>
+                                </div>
+                                <div>
+                                    <input id="options-savescripts" type="checkbox"/><label for="options-savescripts">Scripts (in same-origin frames)</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                    </div>
+                    
+                    <div id="options-tab-advanced">
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Nested Frames&nbsp;</legend>
+                                <div>
+                                    <input id="options-maxframedepth" type="number" min="0" max="10" value="0"/><label for="options-maxframedepth">Maximum depth of saved nested frames</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Large Resources&nbsp;</legend>
+                                <div>
+                                    <input id="options-maxresourcesize" type="number" min="1" max="100" value="50"/><label for="options-maxresourcesize">Maximum size allowed for a resource (MB)</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form>
+                            <fieldset>
+                                <legend>&nbsp;Slow Resources&nbsp;</legend>
+                                <div>
+                                    <input id="options-maxresourcetime" type="number" min="5" max="60" value="10"/><label for="options-maxresourcetime">Maximum time for loading a resource (secs)</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form id="options-mixedcontent">
+                            <fieldset>
+                                <legend>&nbsp;Mixed Content&nbsp;</legend>
+                                <div>
+                                    <input id="options-allowpassive" type="checkbox"/><label for="options-allowpassive">Allow passive mixed content (image,audio,video)</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form id="options-refererheader">
+                            <fieldset>
+                                <legend>&nbsp;Referer Header&nbsp;</legend>
+                                <div>
+                                    <label>When requesting a resource:</label>
+                                </div>
+                                <div>
+                                    <input id="options-noreferer" type="radio" name="header" value="0"/><label for="options-noreferer">Do not send referer header</label>
+                                </div>
+                                <div>
+                                    <input id="options-originonly" type="radio" name="header" value="1"/><label for="options-originonly">Send referer header with origin only</label>
+                                </div>
+                                <div>
+                                    <input id="options-originpath" type="radio" name="header" value="2"/><label for="options-originpath">Send referer header with origin and path</label>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                    </div>
+                    
+                    <div id="options-tab-shortcuts">
+                        
+                        <form id="options-availablekeys">
+                            <fieldset>
+                                <legend>&nbsp;Available Keys&nbsp;</legend>
+                                <div>
+                                    Shortcut must be one of the following:<br>
+                                    &nbsp;&nbsp;Alt+Key, Alt+Shift+Key, Ctrl+Key, Ctrl+Shift+Key,<br>
+                                    &nbsp;&nbsp;MacCtrl+Key, MacCtrl+Shift+Key (only on Mac)
+                                </div>
+                                <div>
+                                    Key must be one of the following:<br>
+                                    &nbsp;&nbsp;A-Z, 0-9, F1-F12, Comma, Period, Space, Insert, Delete,<br>
+                                    &nbsp;&nbsp;Home, End, PageUp, PageDown, Up, Down, Left, Right
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                        <form id="options-configureshortcuts">
+                            <fieldset>
+                                <legend>&nbsp;Configure Shortcuts&nbsp;</legend>
+                                <div>
+                                    <label for="options-shortcuts-browseraction">Save Page:</label><input id="options-shortcuts-browseraction" type="text" value=""/>
+                                </div>
+                            </fieldset>
+                        </form>
+                        
+                    </div>
+                    
+                </div>
+                
+                <div id="options-save">
+                    <button id="options-save-button">Save</button>
+                    <button id="options-resetall-button">Reset All</button>
+                    <span id="options-spacer"></span>
+                </div>
+                
+            </div>
+            
+        </div>
+        
+    </body>
+    
+</html>

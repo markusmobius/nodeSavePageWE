@@ -1,0 +1,23 @@
+{
+"update_url": "https://clients2.google.com/service/update2/crx",
+
+    "manifest_version": 2,
+	"name": "Save Page WE",
+	"version": "12.7",
+    
+	"description": "Save a complete web page (as curently displayed) as a single HTML file that can be opened in any browser.",
+	"icons": { "16": "icon16.png", "32": "icon32.png", "48": "icon48.png", "64": "icon64.png", "128": "icon128-96.png"	},
+    
+    "minimum_chrome_version": "56",
+    "permissions": [ "http://*/*", "https://*/*", "activeTab", "tabs", "webNavigation", "webRequest", "webRequestBlocking",
+                     "contextMenus", "notifications", "storage" ],
+    
+	"browser_action": { "default_icon": { "16": "icon16.png" }, "default_title": "Save Page WE" },
+    
+	"background": { "scripts": [ "background.js" ] },
+    "options_ui": { "page": "options.html", "open_in_tab": true },
+    "web_accessible_resources" : [ "message-panel.html", "unsaved-panel.html", "comments-panel.html", "pageinfo-panel.html",
+                                   "pageinfo-bar-compressed.html", "pageloader-compressed.js" ],
+    
+    "commands": { "_execute_browser_action": { "description": "Save Page", "suggested_key": { "default": "Alt+A" } } }
+}

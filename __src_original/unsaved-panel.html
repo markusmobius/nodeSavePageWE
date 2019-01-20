@@ -1,0 +1,232 @@
+<!--
+/************************************************************************/
+/*                                                                      */
+/*      Save Page WE - Generic WebExtensionn - Unsaved Resources Panel  */
+/*                                                                      */
+/*      HTML and CSS for Unsaved Resources Panel                        */
+/*                                                                      */
+/*      Last Edit - 07 Oct 2018                                         */
+/*                                                                      */
+/*      Copyright (C) 2017-2018 DW-dev                                  */
+/*                                                                      */
+/*      Distributed under the GNU General Public License version 2      */
+/*      See LICENCE.txt file and http://www.gnu.org/licenses/           */
+/*                                                                      */
+/************************************************************************/
+-->
+
+<html>
+    
+    <style id = "savepage-unsaved-panel-style" type="text/css">
+        
+        #savepage-unsaved-panel-overlay,
+        #savepage-unsaved-panel-overlay *
+        {
+            all: initial !important;
+        }
+        
+        #savepage-unsaved-panel-overlay,
+        #savepage-unsaved-panel-overlay *
+        {
+            font-family: "Segoe UI","Helvetica Neue",Ubuntu,Arial !important;
+            font-size: 12px !important;
+            color: black !important;
+            cursor: default !important;
+            -moz-user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        
+        #savepage-unsaved-panel-overlay
+        {
+            position: fixed !important;
+            left: 0px !important;
+            top: 0px !important;
+            right: 0px !important;
+            bottom: 0px !important;
+            background: rgba(0,0,0,0.2) !important;
+            z-index: 2147483646 !important;
+        }
+        
+        #savepage-unsaved-panel-content
+        {
+            display: block !important;
+            width: 640px !important;
+            margin: 26px auto !important;
+            background: #F2F2F2 !important;
+            border: 1px solid #A0A0A0 !important;
+            z-index: 2147483647 !important;
+        }
+        
+        #savepage-unsaved-panel-header
+        {
+            display: block !important;
+            padding: 7px 0px 6px 0px !important;
+            border-bottom: 1px solid #C0C0C0 !important;
+            background: #F2F2F2 !important;
+            font-size: 14px !important;
+            text-align: center !important;
+        }
+        
+        #savepage-unsaved-panel-resources
+        {
+            display: flex !important;
+            height: 255px !important;
+            border-bottom: 1px solid #C0C0C0 !important;
+            background: #FFFFFF !important;
+            overflow: scroll !important;
+        }
+        
+        #savepage-unsaved-panel-sidebar
+        {
+            display: flex !important;
+            position: sticky !important;
+            left: 0px !important;
+            background: #FFFFFF !important;
+        }
+        
+        #savepage-unsaved-panel-nums
+        {
+            display: block !important;
+            background: #FFFFFF !important;
+        }
+        
+        #savepage-unsaved-panel-infs
+        {
+            display: block !important;
+            background: #FFFFFF !important;
+            text-align: right !important;
+        }
+        
+        #savepage-unsaved-panel-urls
+        {
+            display: block !important;
+            background: #FFFFFF !important;
+        }
+        
+        #savepage-unsaved-panel-nums div
+        {
+            display: block !important;
+            padding: 3px 5px !important;
+            background: #FFFFFF !important;
+            white-space: nowrap !important;
+            text-align: right !important;
+        }
+        
+        #savepage-unsaved-panel-infs div
+        {
+            display: block !important;
+            padding: 3px 5px !important;
+            margin-right: 5px !important;
+            background: #FFFFFF !important;
+            color: #C04040 !important;
+            white-space: nowrap !important;
+            text-align: inherit !important;
+        }
+        
+        #savepage-unsaved-panel-urls div
+        {
+            display: block !important;
+            padding: 3px 5px 3px 0px !important;
+            background: #FFFFFF !important;
+            white-space: nowrap !important;
+            -moz-user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+        
+        #savepage-unsaved-panel-nums div:first-child,
+        #savepage-unsaved-panel-infs div:first-child,
+        #savepage-unsaved-panel-urls div:first-child
+        {
+            padding-top: 7px !important;
+        }
+        
+        #savepage-unsaved-panel-nums div:last-child,
+        #savepage-unsaved-panel-infs div:last-child,
+        #savepage-unsaved-panel-urls div:last-child
+        {
+            padding-bottom: 7px !important;
+        }
+        
+        #savepage-unsaved-panel-footer
+        {
+            display: flex !important;
+            background: #F2F2F2 !important;
+        }
+        
+        #savepage-unsaved-panel-spacer
+        {
+            flex: 1 !important;
+            background: #F2F2F2 !important;
+        }
+        
+        #savepage-unsaved-panel-continue,
+        #savepage-unsaved-panel-cancel
+        {
+            min-width: 90px !important;
+            margin: 8px !important;
+            padding: 4px !important;
+            border: 1px solid #C0C0C0 !important;
+            border-radius: 2px !important;
+            background: #F2F2F2 !important;
+            text-align: center !important;
+        }
+        
+        #savepage-unsaved-panel-continue
+        {
+            border: 1px solid #0078D7 !important;
+        }
+        
+        #savepage-unsaved-panel-cancel
+        {
+            margin-right: 16px !important;
+        }
+        
+        #savepage-unsaved-panel-continue:hover,
+        #savepage-unsaved-panel-cancel:hover
+        {
+            background: #E5F1FB !important;
+        }
+        
+        #savepage-unsaved-panel-continue:active,
+        #savepage-unsaved-panel-cancel:active
+        {
+            background: #CCE4F7 !important;
+        }
+        
+    </style>
+    
+    <div id="savepage-unsaved-panel-overlay">
+        
+        <div id="savepage-unsaved-panel-content">
+            
+            <div id="savepage-unsaved-panel-header"></div>
+            
+            <div id="savepage-unsaved-panel-resources">
+            
+                <div id="savepage-unsaved-panel-sidebar">
+                    
+                    <div id="savepage-unsaved-panel-nums"></div>
+                    
+                    <div id="savepage-unsaved-panel-infs"></div>
+                    
+                </div>
+                
+                <div id="savepage-unsaved-panel-urls"></div>
+                
+            </div>
+            
+            <div id="savepage-unsaved-panel-footer">
+                
+                <div id="savepage-unsaved-panel-spacer"></div>
+                
+                <button id="savepage-unsaved-panel-continue">Continue Save</button>
+                
+                <button id="savepage-unsaved-panel-cancel">Cancel Save</button>
+                
+            </div>
+            
+        </div>
+        
+    </div>
+    
+</html>
