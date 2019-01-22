@@ -47,6 +47,7 @@ module.exports = {
 
         //now collect all the resources
         var responses = {};
+		var resources={};
         var completed_requests = 0;
         var good_requests = 0;
         var bad_requests = 0;
@@ -57,7 +58,8 @@ module.exports = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36',
                     'Referer': toPuppeteer[i].referer
                 },
-                encoding:null
+                encoding: null,
+                gzip: true
             };          
             request(options, function callback(error, response, body) {
                 if (!error && response.statusCode == 200){
@@ -68,6 +70,10 @@ module.exports = {
                         "content": binaryString,
                         "mime": response.headers['content-type']
                     };
+					resources[toPuppeteer[this.i].url]={
+						content: binaryString,
+						contentType: response.headers["content-type"]
+					}
                     good_requests++;
                 }
                 else {
@@ -92,7 +98,7 @@ module.exports = {
             await loadPageLoader(params.scrapedResources);
             return htmlOutput;
         }, { "scrapedResources": responses });
-        fs.writeFileSync(task.path, savedPageHTML);
+        fs.writeFileSync(task.path, savedPageHTML);	
         await browser.close();
     }
 };

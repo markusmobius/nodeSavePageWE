@@ -27,7 +27,7 @@ var includeInfoBar = false;
 var includeSummary = false;
 var formatHTML = false;
 var replaceSpaces = true;
-var replaceChar = true;
+var replaceChar = "_";
 var saveHTMLAudioVideo = true;
 var saveHTMLObjectEmbed = true;
 var saveHTMLImagesAll = true;
@@ -37,7 +37,7 @@ var maxResourceSize = 50;
 var maxResourceTime = 10;
 var allowPassive = false;
 var refererHeader = false;
-var purgeDeleted;
+var purgeDeleted=false;
 var menuAction = 2;
 var swapDevices = false;
 var purgeHidden = false;
@@ -118,6 +118,7 @@ async function identifyCrossFrames()
     
     await sleep(200);
     await gatherStyleSheets();
+
     //return resources
     var toPuppeteer = [];
     for (var i = 0; i < resourceLocation.length; i++)
