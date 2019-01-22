@@ -91,13 +91,11 @@ resourceRemembered.length = 0;
 resourceReplaced.length = 0;
 
 var pageLoaderText = "";
-var resourcesList = [];
 
 htmlStrings.length = 0;
 
 htmlStrings[0] = "\uFEFF";  /* UTF-8 Byte Order Mark (BOM) - 0xEF 0xBB 0xBF */
 var htmlOutput = "";
-
 
 /************************************************************************/
 
@@ -120,6 +118,17 @@ async function identifyCrossFrames()
     
     await sleep(200);
     await gatherStyleSheets();
+    //return resources
+    var toPuppeteer = [];
+    for (var i = 0; i < resourceLocation.length; i++)
+    {
+        toPuppeteer.push(
+            {
+                "url": resourceLocation[i],
+                "referer": resourceReferer[i]
+            });
+    }
+    return toPuppeteer;
 }
 
 
@@ -924,16 +933,6 @@ function rememberURL(url,baseuri,mimetype,charset,passive)
                 resourceReason[i] = "";
                 resourceRemembered[i] = 1;
                 resourceReplaced[i] = 0;
-
-                if (resourcesList.hasOwnProperty(resourceLocation[i])) {
-                    var el = resourcesList[resourceLocation[i]];
-                    loadSuccess(i, el.content, el.contentType, "*");
-                }
-                else
-                {
-                    loadFailure(i, "missing");
-                }
-
                 return i;
             }
             else resourceRemembered[i]++;  /* repeated resource */
@@ -1136,11 +1135,19 @@ function loadFailure(index,reason)
 
 function loadInfoBar()
 {
-    loadPageLoader();
+    //here we return and let puppeteer load all the resources
 }
 
-function loadPageLoader()
+function loadPageLoader(scrapedResources)
 {
+    for (var i in scrapedResources) {
+        if (scrapedResources[i].success) {
+            loadSuccess(i, scrapedResources[i].content, scrapedResources[i].mime, "*");
+        }
+        else {
+            loadFailure(i, "missing");
+        }
+    }
     checkResources();
 }
 
