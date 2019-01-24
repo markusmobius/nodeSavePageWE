@@ -25,7 +25,7 @@ module.exports = {
         //read pageloader 
         var pageLoaderCompressed = fs.readFileSync('pageloader-compressed.js', 'utf8');
 
-        //disable web security to allows CORS requests
+        //disable web security to allow CORS requests
         const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-web-security'] });
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36');
@@ -35,7 +35,7 @@ module.exports = {
             height: 10000
         });
 
-        await page.goto(task.url, { timeout: 90000 });
+        await page.goto(task.url, { timeout: 300000 });
         await page.addScriptTag({ path: "nodeSavePageWE_client.js" });
 
         //load website and gather all the resources
@@ -98,7 +98,7 @@ module.exports = {
             await loadPageLoader(params.scrapedResources);
             return htmlOutput;
         }, { "scrapedResources": responses });
-        fs.writeFileSync(task.path, savedPageHTML);	
+        fs.writeFileSync(task.path, savedPageHTML);
         await browser.close();
     }
 };
