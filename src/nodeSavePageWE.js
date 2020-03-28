@@ -34,8 +34,17 @@ module.exports = {
             width: 1600,
             height: 10000
         });
-
-        await page.goto(task.url, { timeout: 300000 });
+        // Original Code
+        // await page.goto(task.url, { timeout: 300000 });
+        // if URL cannot visit, here will close the puppeteer   
+        // start
+        try {
+            await page.goto(task.url, { timeout: 300000 });
+        } catch (e) {
+            browser.close()
+            return Promise.reject(false)
+        }
+        // end
         await page.addScriptTag({ path: "nodeSavePageWE_client.js" });
 
         //load website and gather all the resources
