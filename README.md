@@ -1,5 +1,5 @@
 # nodeSavePageWE
-This is n updated fork of the SavePageWE Chrome/Firefox extension by DW-dev. The previous version used the 2018 version of SavePageWE as the base and this version uses the March 2023 version. The old version still works but doesn't give good results on many websites anymore. The newer version should fix many of these errors.
+This is an updated fork of the SavePageWE Chrome/Firefox extension by DW-dev. The previous version used the 2018 version of SavePageWE as the base and this version uses the March 2023 version. The old version still works but doesn't give good results on many websites anymore. The newer version should fix many of these errors.
 
 It allows you to convert a website into a single, self-contained HTML that embeds most of the required resources. It uses puppeteer as a headless Chrome browser on the backend. 
 
