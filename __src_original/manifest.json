@@ -1,23 +1,27 @@
 {
 "update_url": "https://clients2.google.com/service/update2/crx",
 
-    "manifest_version": 2,
+    "manifest_version": 3,
 	"name": "Save Page WE",
-	"version": "12.7",
+	"version": "33.6",
     
 	"description": "Save a complete web page (as curently displayed) as a single HTML file that can be opened in any browser.",
 	"icons": { "16": "icon16.png", "32": "icon32.png", "48": "icon48.png", "64": "icon64.png", "128": "icon128-96.png"	},
     
-    "minimum_chrome_version": "56",
-    "permissions": [ "http://*/*", "https://*/*", "activeTab", "tabs", "webNavigation", "webRequest", "webRequestBlocking",
-                     "contextMenus", "notifications", "storage" ],
+    "minimum_chrome_version": "88",
+    "permissions": [ "tabs", "webNavigation", "downloads","contextMenus", "scripting", "notifications", "storage" ],
+    "host_permissions": [ "http://*/*", "https://*/*", "file:///*" ],
     
-	"browser_action": { "default_icon": { "16": "icon16.png" }, "default_title": "Save Page WE" },
+	"action": { "default_icon": { "16": "icon16.png" }, "default_title": "Save Page WE" },
     
-	"background": { "scripts": [ "background.js" ] },
+	"background": { "service_worker": "background.js" },
+    "content_scripts": [ { "matches": [ "http://*/*", "https://*/*", "file:///*" ], "js": [ "content-fontface.js" ], "run_at": "document_start", "all_frames": true } ],
     "options_ui": { "page": "options.html", "open_in_tab": true },
-    "web_accessible_resources" : [ "message-panel.html", "unsaved-panel.html", "comments-panel.html", "pageinfo-panel.html",
-                                   "pageinfo-bar-compressed.html", "pageloader-compressed.js" ],
     
-    "commands": { "_execute_browser_action": { "description": "Save Page", "suggested_key": { "default": "Alt+A" } } }
+    "web_accessible_resources" : [ { "matches": [ "http://*/*", "https://*/*", "file:///*" ],
+                                     "resources": [ "download-iframe-GC.html", "download-iframe-GC-dev.html", "download-iframe-MF.html",
+                                                    "download-script.js", "content-fontface-intercept.js" ] } ],
+    
+    "commands": { "_execute_action": { "description": "Save Page", "suggested_key": { "default": "Alt+A" } },
+                  "cancelsave": { "description": "Cancel Save", "suggested_key": { "default": "Alt+C" } } }
 }

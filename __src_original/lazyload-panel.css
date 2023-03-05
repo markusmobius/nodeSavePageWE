@@ -1,0 +1,131 @@
+/************************************************************************/
+/*                                                                      */
+/*      Save Page WE - Generic WebExtension - Lazy Load Panel           */
+/*                                                                      */
+/*      CSS for Lazy Load Panel                                         */
+/*                                                                      */
+/*      Last Edit - 19 Apr 2022                                         */
+/*                                                                      */
+/*      Copyright (C) 2022 DW-dev                                       */
+/*                                                                      */
+/*      Distributed under the GNU General Public License version 2      */
+/*      See LICENCE.txt file and http://www.gnu.org/licenses/           */
+/*                                                                      */
+/************************************************************************/
+
+#savepage-lazyload-panel-overlay,
+#savepage-lazyload-panel-overlay *
+{
+    all: initial !important;
+}
+
+#savepage-lazyload-panel-overlay,
+#savepage-lazyload-panel-overlay *
+{
+    font-family: "Segoe UI","Helvetica Neue",Ubuntu,Arial !important;
+    font-size: 12px !important;
+    color: black !important;
+    cursor: default !important;
+    -moz-user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+#savepage-lazyload-panel-overlay
+{
+    position: fixed !important;
+    left: 0px !important;
+    top: 0px !important;
+    right: 0px !important;
+    bottom: 0px !important;
+    background: rgba(0,0,0,0.2) !important;
+    z-index: 2147483646 !important;
+}
+
+#savepage-lazyload-panel-content
+{
+    display: block !important;
+    width: 248px !important;
+    margin: 34px auto !important;
+    border: 1px solid #A0A0A0 !important;
+    background: #F2F2F2 !important;
+    z-index: 2147483647 !important;
+}
+
+#savepage-lazyload-panel-header
+{
+    display: block !important;
+    padding: 7px 0px 6px 0px !important;
+    border-bottom: 1px solid #C0C0C0 !important;
+    background: #F2F2F2 !important;
+    font-size: 14px !important;
+    text-align: center !important;
+}
+
+#savepage-lazyload-panel-text
+{
+    display: block !important;
+    width: calc(100% - 20px) !important;
+    resize: none !important;
+    padding: 15px 10px !important;
+    border-bottom: 1px solid #C0C0C0 !important;
+    background: #FFFFFF !important;
+    text-align: center !important;
+    line-height: 1.3 !important;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    overflow-y: auto !important;
+    cursor: text !important;
+}
+
+#savepage-lazyload-panel-footer
+{
+    display: flex !important;
+    background: #F2F2F2 !important;
+}
+
+#savepage-lazyload-panel-spacer
+{
+    flex: 1 !important;
+    background: #F2F2F2 !important;
+}
+
+#savepage-lazyload-panel-skip,
+#savepage-lazyload-panel-cancel
+{
+    min-width: 90px !important;
+    margin: 8px !important;
+    padding: 4px !important;
+    border: 1px solid #C0C0C0 !important;
+    border-radius: 2px !important;
+    background: #F2F2F2 !important;
+    text-align: center !important;
+}
+
+#savepage-lazyload-panel-cancel
+{
+    margin-right: 16px !important;
+}
+
+#savepage-lazyload-panel-skip::-moz-focus-inner,
+#savepage-lazyload-panel-cancel::-moz-focus-inner
+{
+    border: none !important;
+}
+
+#savepage-lazyload-panel-skip:focus,
+#savepage-lazyload-panel-cancel:focus
+{
+    border: 1px solid #0078D7 !important;
+}
+
+#savepage-lazyload-panel-skip:hover,
+#savepage-lazyload-panel-cancel:hover
+{
+    background: #E5F1FB !important;
+}
+
+#savepage-lazyload-panel-skip:active,
+#savepage-lazyload-panel-cancel:active
+{
+    background: #CCE4F7 !important;
+}

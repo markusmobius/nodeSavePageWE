@@ -4,9 +4,9 @@
 /*                                                                      */
 /*      Javascript for Saving Content Pages (main frame)                */
 /*                                                                      */
-/*      Last Edit - 23 Dec 2018                                         */
+/*      Last Edit - 29 Jan 2023                                         */
 /*                                                                      */
-/*      Copyright (C) 2016-2018 DW-dev                                  */
+/*      Copyright (C) 2016-2022 DW-dev                                  */
 /*                                                                      */
 /*      Distributed under the GNU General Public License version 2      */
 /*      See LICENCE.txt file and http://www.gnu.org/licenses/           */
@@ -17,14 +17,133 @@
 /*                                                                      */
 /* Refer to Google Chrome developer documentation:                      */
 /*                                                                      */
-/*  https://developer.chrome.com/extensions/content_scripts             */
-/*  https://developer.chrome.com/extensions/messaging                   */
-/*  https://developer.chrome.com/extensions/xhr                         */
+/* developer.chrome.com/docs/extensions/mv3/content_scripts             */
+/* developer.chrome.com/docs/extensions/mv3/messaging                   */
+/* developer.chrome.com/docs/extensions/mv3/xhr                         */
 /*                                                                      */
-/*  https://developer.chrome.com/extensions/match_patterns              */
+/* developer.chrome.com/docs/extensions/mv3/match_patterns              */
 /*                                                                      */
-/*  https://developer.chrome.com/extensions/runtime                     */
-/*  https://developer.chrome.com/extensions/storage                     */
+/* developer.chrome.com/docs/extensions/reference/runtime               */
+/* developer.chrome.com/docs/extensions/reference/storage               */
+/*                                                                      */
+/************************************************************************/
+
+/************************************************************************/
+/*                                                                      */
+/* Saving Pages in Background Tabs                                      */
+/*                                                                      */
+/* Using the window.setTimeout() function in the content script         */
+/* causes long delays when saving a page in a background tab.           */
+/* Browsers always increase the timeout to at least one second and      */
+/* sometimes the timeout can be many seconds.                           */
+/*                                                                      */
+/* The solution is to send a message from the content script to the     */
+/* background script requesting a delay and wait for the response.      */
+/* The background script calls the window.setTimeout() function and     */
+/* sends an asynchronous response when the timeout expires.             */
+/*                                                                      */
+/************************************************************************/
+
+/************************************************************************/
+/*                                                                      */
+/* Lazy Load JS Libraries                                               */
+/*                                                                      */
+/* Libraries that manage lazy loading of images in <img> elements.      */
+/*                                                                      */
+/* lazysizes           data-src         data-srcset                     */
+/*                                                                      */
+/* lazyload.js         data-src         data-srcset                     */
+/* (old version)       data-original    data-original-set               */
+/*                                                                      */
+/* Lozad               data-src         data-srcset                     */
+/*                                                                      */
+/* Vanilla Lazyload    data-src         data-srcset                     */
+/*                                                                      */
+/* Layzr.js            data-normal      data-srcset                     */
+/*                                                                      */
+/* blazy.js            data-src         -                               */
+/*                                                                      */
+/* lazyestload.js      data-src         data-srcset                     */
+/*                                                                      */
+/* yall.js             data-src         data-srcset                     */
+/*                                                                      */
+/*  responsivelyLazy    -                data-srcset                    */
+/*                                                                      */
+/************************************************************************/
+
+/************************************************************************/
+/*                                                                      */
+/* CSS-in-JS Libraries                                                  */
+/*                                                                      */
+/* For <style> elements there may be rules in element.sheet.cssRules    */
+/* that are not in element.textContent.                                 */
+/*                                                                      */
+/* This is often the case for CSS-in-JS libraries, for example:         */
+/*                                                                      */
+/* - Styled Components v3.1.6 Issue #1571                               */
+/*   - ref. https://github.com/styled-components/                       */
+/*          styled-components/issues/1571                               */
+/*                                                                      */
+/* - Styled Components >= v4 - data-styled attribute                    */
+/*   - e.g. observationdeck.kinja.com pages                             */
+/*                                                                      */
+/* - Styled Components <= v3 - data-styled-components attribute         */
+/*   - e.g. reddit.com pages                                            */
+/*                                                                      */
+/* - Styled Components >= v4 - data-styled attribute                    */
+/*   - e.g. observationdeck.kinja.com pages                             */
+/*                                                                      */
+/* - Styled JSX - data-styled-jsx attribute                             */
+/*   - e.g. www.flightstats.com pages                                   */
+/*                                                                      */
+/* - React Native - id="react-native-stylesheet" attribute              */
+/*   - e.g. twitter.com pages                                           */
+/*                                                                      */
+/* - React-JSS or JSS - data-jss attribute                              */
+/*   - e.g. https://www.dailykos.com                                    */
+/*                                                                      */
+/* - Glamor - data-glamor attribute                                     */
+/*   - e.g. https://www.dailykos.com                                    */
+/*                                                                      */
+/* - Emotion - data-emotion attribute                                   */
+/*   - not tested                                                       */
+/*                                                                      */
+/* - Aphrodite - data-aphrodite attribute                               */
+/*   - not tested                                                       */
+/*                                                                      */
+/* - Styletron - data-styletron attribute                               */
+/*   - not tested                                                       */
+/*                                                                      */
+/* - Unknown - data-lights                                              */
+/*   - e.g. https://www.nytimes.com                                     */
+/*                                                                      */
+/************************************************************************/
+
+/************************************************************************/
+/*                                                                      */
+/* Tab Page Type                                                        */
+/*                                                                      */
+/*  0 = Normal Page                                                     */
+/*  1 = Saved Page                                                      */
+/*  2 = Saved Page with Resource Loader                                 */
+/*                                                                      */
+/************************************************************************/
+
+/************************************************************************/
+/*                                                                      */
+/* Tab Save State                                                       */
+/*                                                                      */
+/* -2 = Before Navigate                                                 */
+/* -1 = Script loaded (page loaded)                                     */
+/*  0 = Lazy Loads                                                      */
+/*  1 = First Pass                                                      */
+/*  2 = Second Pass                                                     */
+/*  3 = Third Pass                                                      */
+/*  4 = Remove Resource Loader                                          */
+/*  5 = Extract Image/Audio/Video                                       */
+/*  6 = Saved                                                           */
+/*  7 = Removed                                                         */
+/*  8 = Extracted                                                       */
 /*                                                                      */
 /************************************************************************/
 
@@ -35,110 +154,152 @@
 /* Global variables */
 
 var isFirefox;
-var ffVersion;
 
 var platformOS;
 var platformArch;
 
+var installType;
+
 var maxTotalSize;  /* MB */
 
-var showWarning,showURLList,promptComments;
-var usePageLoader,retainCrossFrames,removeUnsavedURLs,includeInfoBar,includeSummary,formatHTML;
-var savedFileName,replaceSpaces,replaceChar;
+var showWarning,showResources,promptComments,skipWarningsComments,useNewSaveMethod;
+var loadLazyContent,lazyLoadType,loadLazyImages,retainCrossFrames,mergeCSSImages,executeScripts,removeUnsavedURLs,removeElements,rehideElements,includeInfoBar,includeSummary,formatHTML;
 var saveHTMLAudioVideo,saveHTMLObjectEmbed,saveHTMLImagesAll;
-var saveCSSImagesAll,saveCSSFontsWoff,saveScripts;
+var saveCSSImagesAll,saveCSSFontsWoff,saveCSSFontsAll,saveScripts;
+var savedFileName,replaceSpaces,replaceChar,maxFileNameLength;
+var saveDelayTime;
+var lazyLoadScrollTime,lazyLoadShrinkTime;
 var maxFrameDepth;
 var maxResourceSize;
 var maxResourceTime;
 var allowPassive;
-var refererHeader;
+var crossOrigin;
+var useAutomation;
 
-var savedPage;  /* page was saved by Save Page WE */
-var savedPageLoader;  /* page contains page loader script */
+var pageType = 0;
+var saveState = -1;
 
-var menuAction=2;
+var iframe;
 
-var externalSave,purgeDeleted,purgeHidden,swapDevices;  /* from Print Edit WE*/
+var messagePanel,lazyloadPanel,unsavedPanel,commentsPanel,pageinfoPanel;  /* user interface panels */
+var pageinfoBar,shadowLoader;  /* inserted in saved page */
+
+var menuAction;
+var savedItems;
+var toggleLazy;
+var extractSrcUrl;
+var multipleSaves;
+var swapDevices;  /* from Print Edit WE*/
+
+var skipLazyLoad,cancelSave;
+
+var htmlCssText,bodyCssText,origScrollY;
 
 var passNumber;
-var iconFound;
 
-var crossFrameName = new Array();
-var crossFrameURL = new Array();
-var crossFrameHTML = new Array();
-var crossFrameFonts = new Array();
+var frameKey = [];
+var frameURL = [];
+var frameHTML = [];
+var frameFonts = [];
 
 var resourceCount;
 
-var resourceLocation = new Array();
-var resourceReferer = new Array();
-var resourceMimeType = new Array();
-var resourceCharSet = new Array();
-var resourcePassive = new Array();
-var resourceContent = new Array();
-var resourceStatus = new Array();
-var resourceReason = new Array();
-var resourceRemembered = new Array();
-var resourceReplaced = new Array();
+var resourceLocation = [];
+var resourceReferrer = [];
+var resourceMimeType = [];
+var resourceCharSet = [];
+var resourcePassive = [];
+var resourceContent = [];
+var resourceStatus = [];
+var resourceReason = [];
+var resourceRemembered = [];
+var resourceReplaced = [];
+var resourceCSSRemembered = [];  /* number of times CSS image remembered */
+var resourceCSSFrameKeys = [];  /* keys of frames in which CSS image remembered */
 
-var htmlStrings = new Array();
-var saveStrings = new Array();
+var firstIconLocation;  /* location of first favicon in document head */
+var rootIconLocation;  /* location of favicon in website root */
 
-var timeStart = new Array();
-var timeFinish = new Array();
+var enteredComments;
 
-var pageInfoBarText,pageLoaderText,enteredComments;
+var htmlStrings = [];
+
+var timeStart = [];
+var timeFinish = [];
+
+var shadowElements = ["audio","video","use"];  /* HTML & SVG elements that have built-in Shadow DOM */
+var hrefSVGElements = ["a","altGlyph","animate","animateColor","animateMotion","animateTransform","cursor","discard","feImage","filter","font-face-uri","glyphRef","image",
+                       "linearGradient","mpath","pattern","radialGradient","script","set","textPath","tref","use"];  /* SVG 1.1 & SVG 2 elements that can have xlink:href or href attribute */
+
+var debugEnable = false;
 
 /************************************************************************/
 
 /* Initialize on script load */
 
 chrome.storage.local.get(null,
-function(object)
+function(local)
 {
     /* Load environment */
     
-    isFirefox = object["environment-isfirefox"];
+    isFirefox = local["environment-isfirefox"];
     
-    if (isFirefox) ffVersion = object["environment-ffversion"];
+    platformOS = local["environment-platformos"];
     
-    platformOS = object["environment-platformos"];
+    platformArch = local["environment-platformarch"];
     
-    platformArch = object["environment-platformarch"];
+    installType = local["environment-installtype"];
     
     /* Load options */
     
-    showWarning = object["options-showwarning"];
-    showURLList = object["options-showurllist"];
-    promptComments = object["options-promptcomments"];
+    showWarning = local["options-showwarning"];
+    showResources = local["options-showresources"];
+    promptComments = local["options-promptcomments"];
+    skipWarningsComments = local["options-skipwarningscomments"];
+    useNewSaveMethod = local["options-usenewsavemethod"];
     
-    usePageLoader = object["options-usepageloader"];
-    retainCrossFrames = object["options-retaincrossframes"];
-    removeUnsavedURLs = object["options-removeunsavedurls"];
-    includeInfoBar = object["options-includeinfobar"];
-    includeSummary = object["options-includesummary"];
-    formatHTML = object["options-formathtml"];
+    loadLazyContent = local["options-loadlazycontent"];
+    lazyLoadType = local["options-lazyloadtype"];
+    loadLazyImages = local["options-loadlazyimages"];
+    retainCrossFrames = local["options-retaincrossframes"];
+    mergeCSSImages = local["options-mergecssimages"];
+    executeScripts = local["options-executescripts"];
+    removeUnsavedURLs = local["options-removeunsavedurls"];
+    removeElements = local["options-removeelements"];
+    rehideElements = local["options-rehideelements"];
+    includeInfoBar = local["options-includeinfobar"];
+    includeSummary = local["options-includesummary"];
+    formatHTML = local["options-formathtml"];
     
-    savedFileName = object["options-savedfilename"];
-    replaceSpaces = object["options-replacespaces"];
-    replaceChar = object["options-replacechar"];
+    saveHTMLImagesAll = local["options-savehtmlimagesall"];
+    saveHTMLAudioVideo = local["options-savehtmlaudiovideo"];
+    saveHTMLObjectEmbed = local["options-savehtmlobjectembed"];
+    saveCSSImagesAll = local["options-savecssimagesall"];
+    saveCSSFontsWoff = local["options-savecssfontswoff"];
+    saveCSSFontsAll = local["options-savecssfontsall"];
+    saveScripts = local["options-savescripts"];
     
-    saveHTMLImagesAll = object["options-savehtmlimagesall"];
-    saveHTMLAudioVideo = object["options-savehtmlaudiovideo"];
-    saveHTMLObjectEmbed = object["options-savehtmlobjectembed"];
-    saveCSSImagesAll = object["options-savecssimagesall"];
-    saveCSSFontsWoff = object["options-savecssfontswoff"];
-    saveScripts = object["options-savescripts"];
+    savedFileName = local["options-savedfilename"];
+    replaceSpaces = local["options-replacespaces"];
+    replaceChar = local["options-replacechar"];
+    maxFileNameLength = local["options-maxfilenamelength"];
     
-    maxFrameDepth = object["options-maxframedepth"];
+    saveDelayTime = local["options-savedelaytime"];
     
-    maxResourceSize = object["options-maxresourcesize"];
+    lazyLoadScrollTime = local["options-lazyloadscrolltime"];
+    lazyLoadShrinkTime = local["options-lazyloadshrinktime"];
     
-    maxResourceTime = object["options-maxresourcetime"];
+    maxFrameDepth = local["options-maxframedepth"];
     
-    allowPassive = object["options-allowpassive"];
+    maxResourceSize = local["options-maxresourcesize"];
     
-    refererHeader = object["options-refererheader"];
+    maxResourceTime = local["options-maxresourcetime"];
+    
+    allowPassive = local["options-allowpassive"];
+    
+    crossOrigin = local["options-crossorigin"];
+    
+    useAutomation = local["options-useautomation"];
     
     /* Set maximum total size for resources */
     
@@ -146,8 +307,7 @@ function(object)
     {
         if (isFirefox)
         {
-            if (ffVersion < 55) maxTotalSize = 150;  /* 150MB */
-            else maxTotalSize = (platformArch == "x86-64") ? 1000 : 400;  /* 64-bit 1000MB, 32-bit 400MB */
+            maxTotalSize = (platformArch == "x86-64") ? 1000 : 400;  /* 64-bit 1000MB, 32-bit 400MB */
         }
         else  /* Chrome */
         {
@@ -159,15 +319,41 @@ function(object)
         maxTotalSize = 200;  /* 200MB */
     }
     
-    /* Set saved page flags */
-    
-    savedPage = (document.querySelector("meta[name='savepage-url']") != null);
-    
-    savedPageLoader = (document.querySelector("script[id='savepage-pageloader']") != null);
-    
     /* Add listeners */
     
     addListeners();
+    
+    /* Inject iframe for downloading saved pages  */
+    
+    iframe = document.createElement("iframe");
+    iframe.id = "savepage-download-iframe";
+    iframe.src = chrome.runtime.getURL(isFirefox ? "download-iframe-MF.html" : (installType == "normal" ? "download-iframe-GC.html" : "download-iframe-GC-dev.html"));
+    iframe.style = "display: none !important;";
+    document.documentElement.appendChild(iframe);
+    
+    /* Request extension files */
+    
+    chrome.runtime.sendMessage({ type: "getFiles" },
+    function(response)
+    {
+        messagePanel = response.messagepanel;
+        lazyloadPanel = response.lazyloadpanel;
+        unsavedPanel = response.unsavedpanel;
+        commentsPanel = response.commentspanel;
+        pageinfoPanel = response.pageinfopanel;
+        pageinfoBar = response.pageinfobar;
+        shadowLoader = response.shadowloader;
+        
+        /* Script loaded */
+        
+        pageType = (document.querySelector("script[id='savepage-pageloader']") != null ||  /* Version 7.0-14.0 */
+                    document.querySelector("meta[name='savepage-resourceloader']") != null) ? 2 :  /* Version 15.0-15.1 */
+                    document.querySelector("meta[name='savepage-url']") != null ? 1 : 0;
+        
+        saveState = -1;
+        
+        chrome.runtime.sendMessage({ type: "scriptLoaded", pagetype: pageType, savestate: saveState });
+    });
 });
 
 /************************************************************************/
@@ -181,41 +367,54 @@ function addListeners()
     chrome.storage.onChanged.addListener(
     function(changes,areaName)
     {
-        chrome.storage.local.get(null,
-        function(object)
-        {
-            showWarning = object["options-showwarning"];
-            showURLList = object["options-showurllist"];
-            promptComments = object["options-promptcomments"];
-            
-            usePageLoader = object["options-usepageloader"];
-            retainCrossFrames = object["options-retaincrossframes"];
-            removeUnsavedURLs = object["options-removeunsavedurls"];
-            includeInfoBar = object["options-includeinfobar"];
-            includeSummary = object["options-includesummary"];
-            formatHTML = object["options-formathtml"];
-            
-            savedFileName = object["options-savedfilename"];
-            replaceSpaces = object["options-replacespaces"];
-            replaceChar = object["options-replacechar"];
-            
-            saveHTMLImagesAll = object["options-savehtmlimagesall"];
-            saveHTMLAudioVideo = object["options-savehtmlaudiovideo"];
-            saveHTMLObjectEmbed = object["options-savehtmlobjectembed"];
-            saveCSSImagesAll = object["options-savecssimagesall"];
-            saveCSSFontsWoff = object["options-savecssfontswoff"];
-            saveScripts = object["options-savescripts"];
-            
-            maxFrameDepth = object["options-maxframedepth"];
-            
-            maxResourceSize = object["options-maxresourcesize"];
-            
-            maxResourceTime = object["options-maxresourcetime"];
-            
-            allowPassive = object["options-allowpassive"];
-            
-            refererHeader = object["options-refererheader"];
-        });
+        if ("options-showwarning" in changes) showWarning = changes["options-showwarning"].newValue;
+        if ("options-showresources" in changes) showResources = changes["options-showresources"].newValue;
+        if ("options-promptcomments" in changes) promptComments = changes["options-promptcomments"].newValue;
+        if ("options-skipwarningscomments" in changes) skipWarningsComments = changes["options-skipwarningscomments"].newValue;
+        if ("options-usenewsavemethod" in changes) useNewSaveMethod = changes["options-usenewsavemethod"].newValue;
+        
+        if ("options-loadlazycontent" in changes) loadLazyContent = changes["options-loadlazycontent"].newValue;
+        if ("options-lazyloadtype" in changes) lazyLoadType = changes["options-lazyloadtype"].newValue;
+        if ("options-loadlazyimages" in changes) loadLazyImages = changes["options-loadlazyimages"].newValue;
+        if ("options-retaincrossframes" in changes) retainCrossFrames = changes["options-retaincrossframes"].newValue;
+        if ("options-mergecssimages" in changes) mergeCSSImages = changes["options-mergecssimages"].newValue;
+        if ("options-executescripts" in changes) executeScripts = changes["options-executescripts"].newValue;
+        if ("options-removeunsavedurls" in changes) removeUnsavedURLs = changes["options-removeunsavedurls"].newValue;
+        if ("options-removeelements" in changes) removeElements = changes["options-removeelements"].newValue;
+        if ("options-rehideelements" in changes) rehideElements = changes["options-rehideelements"].newValue;
+        if ("options-includeinfobar" in changes) includeInfoBar = changes["options-includeinfobar"].newValue;
+        if ("options-includesummary" in changes) includeSummary = changes["options-includesummary"].newValue;
+        if ("options-formathtml" in changes) formatHTML = changes["options-formathtml"].newValue;
+        
+        if ("options-savehtmlimagesall" in changes) saveHTMLImagesAll = changes["options-savehtmlimagesall"].newValue;
+        if ("options-savehtmlaudiovideo" in changes) saveHTMLAudioVideo = changes["options-savehtmlaudiovideo"].newValue;
+        if ("options-savehtmlobjectembed" in changes) saveHTMLObjectEmbed = changes["options-savehtmlobjectembed"].newValue;
+        if ("options-savecssimagesall" in changes) saveCSSImagesAll = changes["options-savecssimagesall"].newValue;
+        if ("options-savecssfontswoff" in changes) saveCSSFontsWoff = changes["options-savecssfontswoff"].newValue;
+        if ("options-savecssfontsall" in changes) saveCSSFontsAll = changes["options-savecssfontsall"].newValue;
+        if ("options-savescripts" in changes) saveScripts = changes["options-savescripts"].newValue;
+        
+        if ("options-savedfilename" in changes) savedFileName = changes["options-savedfilename"].newValue;
+        if ("options-replacespaces" in changes) replaceSpaces = changes["options-replacespaces"].newValue;
+        if ("options-replacechar" in changes) replaceChar = changes["options-replacechar"].newValue;
+        if ("options-maxfilenamelength" in changes) maxFileNameLength = changes["options-maxfilenamelength"].newValue;
+        
+        if ("options-savedelaytime" in changes) saveDelayTime = changes["options-savedelaytime"].newValue;
+        
+        if ("options-lazyloadscrolltime" in changes) lazyLoadScrollTime = changes["options-lazyloadscrolltime"].newValue;
+        if ("options-lazyloadshrinktime" in changes) lazyLoadShrinkTime = changes["options-lazyloadshrinktime"].newValue;
+        
+        if ("options-maxframedepth" in changes) maxFrameDepth = changes["options-maxframedepth"].newValue;
+        
+        if ("options-maxresourcesize" in changes) maxResourceSize = changes["options-maxresourcesize"].newValue;
+        
+        if ("options-maxresourcetime" in changes) maxResourceTime = changes["options-maxresourcetime"].newValue;
+        
+        if ("options-allowpassive" in changes) allowPassive = changes["options-allowpassive"].newValue;
+        
+        if ("options-crossorigin" in changes) crossOrigin = changes["options-crossorigin"].newValue;
+        
+        if ("options-useautomation" in changes) useAutomation = changes["options-useautomation"].newValue;
     });
     
     /* Message received listener */
@@ -229,22 +428,36 @@ function addListeners()
         {
             /* Messages from background page */
             
+            case "getState":
+                
+                sendResponse({ pagetype: pageType, savestate: saveState });
+                
+                break;
+                
             case "performAction":
                 
-                sendResponse({ });  /* to confirm content script has been loaded */
-                
                 menuAction = message.menuaction;
-                
-                externalSave = message.externalsave;
-                purgeDeleted = message.purgedeleted;
-                purgeHidden = message.purgehidden;
+                savedItems = message.saveditems;
+                toggleLazy = message.togglelazy;
+                extractSrcUrl = message.extractsrcurl;
+                multipleSaves = message.multiplesaves;
                 swapDevices = message.swapdevices;
+                
+                cancelSave = false;
                 
                 /* Check if Print Edit WE is in editing mode */
                 
                 if (document.getElementById("printedit-gui-container") != null)
-                { 
-                    alert("Print Edit WE must be suspended before\nperforming this operation.");
+                {
+                    showMessage("Operation failed","Operation","Print Edit WE must be suspended before performing this operation.",null,cancel);
+                    
+                    function cancel()
+                    {
+                        saveState = -1;
+                        
+                        if (menuAction <= 1) chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+                        else chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
+                    }
                     
                     break;
                 }
@@ -252,6 +465,12 @@ function addListeners()
                 /* Close message panel if open */
                 
                 panel = document.getElementById("savepage-message-panel-container");
+                
+                if (panel != null) document.documentElement.removeChild(panel);
+                
+                /* Close lazy load panel if open */
+                
+                panel = document.getElementById("savepage-lazyload-panel-container");
                 
                 if (panel != null) document.documentElement.removeChild(panel);
                 
@@ -279,30 +498,15 @@ function addListeners()
                 
                 if (bar != null) document.documentElement.removeChild(bar);
                 
-                /* Wait for page to complete loading */
+                /* Perform action */
                 
-                if (document.readyState == "complete")
-                {
-                    window.setTimeout(
-                    function()
-                    {
-                        performAction(message.srcurl);
-                    },50);
-                }
-                else
-                {
-                    window.addEventListener("load",
-                    function(event)
-                    {
-                        if (document.readyState == "complete") performAction(message.srcurl);
-                    },false);
-                }
+                performAction();
                 
                 break;
                 
             case "loadSuccess":
                 
-                loadSuccess(message.index,message.content,message.contenttype,message.alloworigin);
+                loadSuccess(message.index,message.reason,message.content,message.mimetype,message.charset);
                 
                 break;
                 
@@ -312,17 +516,30 @@ function addListeners()
                 
                 break;
                 
-            case "replyCrossFrame":
+            case "replyFrame":
                 
-                if (message.url != document.URL)  /* not main window */
-                {
-                    i = crossFrameName.length;
-                    
-                    crossFrameName[i] = message.name;
-                    crossFrameURL[i] = message.url;
-                    crossFrameHTML[i] = message.html;
-                    crossFrameFonts[i] = message.fonts;
-                }
+                i = frameKey.length;
+                
+                frameKey[i] = message.key;
+                frameURL[i] = message.url;
+                frameHTML[i] = message.html;
+                frameFonts[i] = message.fonts;
+                
+                break;
+                
+            case "cancelSave":
+                
+                cancelSave = true;
+                
+                break;
+                
+            case "saveResult":
+                
+                sendResponse({ });
+                
+                saveState = (message.success ? 6 : -1);
+                
+                chrome.runtime.sendMessage({ type: "saveDone", success: message.success, pagetype: pageType, savestate: saveState });
                 
                 break;
         }
@@ -333,143 +550,375 @@ function addListeners()
 
 /* Perform action function */
 
-function performAction(srcurl)
+function performAction()
 {
-    if (menuAction <= 2)  /* save page */
+    if (menuAction <= 1)  /* save page */
     {
-        if (!savedPageLoader)
+        if (pageType < 2)  /* not saved page with resource loader */
         {
-            /* Initialize resources */
-            
-            crossFrameName.length = 0;
-            crossFrameURL.length = 0;
-            crossFrameHTML.length = 0;
-            crossFrameFonts.length = 0;
-            
-            resourceLocation.length = 0;
-            resourceReferer.length = 0;
-            resourceMimeType.length = 0;
-            resourceCharSet.length = 0;
-            resourcePassive.length = 0;
-            resourceContent.length = 0;
-            resourceStatus.length = 0;
-            resourceReason.length = 0;
-            resourceRemembered.length = 0;
-            resourceReplaced.length = 0;
-            
-            pageInfoBarText = "";
-            pageLoaderText = "";
-            enteredComments = "";
-            
-            htmlStrings.length = 0;
-            
-            htmlStrings[0] = "\uFEFF";  /* UTF-8 Byte Order Mark (BOM) - 0xEF 0xBB 0xBF */
-            
-            if (retainCrossFrames) identifyCrossFrames();
-            else gatherStyleSheets();
-        }
-        else
-        {
-            alert("This page was loaded using page loader.\nCannot perform this operation.");
-            
-            if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
-        }
-    }
-    else if (menuAction == 3)  /* view saved page info */
-    {
-        if (savedPage) viewSavedPageInfo();
-        else
-        {
-            alert("This page was not saved by Save Page WE.\nCannot perform this operation.");
-            
-            if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
-        }
-    }
-    else if (menuAction == 4)  /* remove page loader */
-    {
-        if (savedPage)
-        {
-            if (savedPageLoader) removePageLoader();
-            else
+            chrome.runtime.sendMessage({ type: "setDelay", milliseconds: saveDelayTime*1000 },  /* allow time for more content to load (e.g. search results) */
+            function(response)
             {
-                alert("This page was not loaded using page loader.\nCannot perform this operation.");
+                if (loadLazyContent != toggleLazy) forceLazyContent();
+                else
+                {
+                    if (loadLazyImages) forceLazyImages();
+                    
+                    initializeBeforeSave();
+                }
+            });
+        }
+        else  /* saved page with resource loader */
+        {
+            showMessage("Save Page failed","Save","This page was loaded using resource loader.\n\nRemove resource loader and then save page.",null,cancel);
+            
+            function cancel()
+            {
+                saveState = -1;
                 
-                if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
+                chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
             }
         }
-        else
+    }
+    else if (menuAction == 2)  /* view saved page info */
+    {
+        if (pageType > 0)  /* saved page */
         {
-            alert("This page was not saved by Save Page WE.\nCannot perform this operation.");
-            
-            if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
+            viewSavedPageInfo();
+        }
+        else  /* not saved page */
+        {
+            showMessage("View Saved Page Info failed","View Info","This page was not saved by Save Page WE.\n\nCannot perform this operation.",null,null);
         }
     }
-    else if (menuAction == 5)  /* extract saved page media (image/audio/video) */
+    else if (menuAction == 3)  /* remove resource loader */
     {
-        if (savedPage) extractSavedPageMedia(srcurl);
-        else
+        if (pageType == 2)  /* saved page with resource loader */
         {
-            alert("This page was not saved by Save Page WE.\nCannot perform this operation.");
-            
-            if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
+            removeResourceLoader();
+        }
+        else  /* not saved page with resource loader */
+        {
+            if (pageType == 1) showMessage("Remove Resource Loader failed","Remove","This page was not loaded using resource loader.\n\nCannot perform this operation.",null,null);
+            else showMessage("Remove Resource Loader failed","Remove","This page was not saved by Save Page WE.\n\nCannot perform this operation.",null,null);
+        }
+    }
+    else if (menuAction == 4)  /* extract saved page media (image/audio/video) */
+    {
+        if (pageType > 0)  /* saved page */
+        {
+            extractSavedPageMedia();
+        }
+        else  /* not saved page */
+        {
+            showMessage("Extract Image/Audio/Video failed","Extract","This page was not saved by Save Page WE.\n\nCannot perform this operation.",null,null);
         }
     }
 }
 
 /************************************************************************/
 
-/* Pre Pass - to identify and name cross-origin frames */
+/* Load lazy content */
 
-function identifyCrossFrames()
+function forceLazyContent()
 {
-    passNumber = 0;
+    var origscrolly,scrolly,panel,scalex,scaley,originx,originy,lastscrollheight;
+    var starttime,endtime;
     
-    timeStart[0] = performance.now();
+    skipLazyLoad = false;
     
-    nameCrossFrames(0,window,document.documentElement);
-    
-    timeFinish[0] = performance.now();
-    
-    chrome.runtime.sendMessage({ type: "requestCrossFrames" });
-    
-    window.setTimeout(function() { gatherStyleSheets(); },200);  /* allow time for cross-origin frames to reply */
+    if (lazyLoadType == 0)  /* scroll page */
+    {
+        saveState = 0;  /* lazy load */
+        
+        chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
+        
+        showLazyLoad();
+        
+        starttime = performance.now();
+        
+        origscrolly = window.scrollY;
+        scrolly = 0;
+        
+        window.scrollTo(0,scrolly);
+        
+        if (debugEnable) console.log("INITIAL  -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scroll Y: " + scrolly);
+        
+        chrome.runtime.sendMessage({ type: "setDelay", milliseconds: lazyLoadScrollTime*1000 },  /* allow time for first lazy loads to complete */
+        function timer(response)
+        {
+            if (scrolly < document.documentElement.scrollHeight && !skipLazyLoad && !cancelSave)
+            {
+                if (debugEnable) console.log("GROWING  -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scroll Y: " + scrolly);
+                
+                scrolly += window.innerHeight;
+                
+                window.scrollTo(0,scrolly);
+                
+                chrome.runtime.sendMessage({ type: "setDelay", milliseconds: lazyLoadScrollTime*1000 },  /* allow time for some more lazy loads to complete */
+                function(response)
+                {
+                    timer();
+                });
+            }
+            else
+            {
+                if (debugEnable) console.log("WAITING  -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scroll Y: " + scrolly);
+                
+                window.scrollTo(0,document.documentElement.scrollHeight-window.innerHeight-10);
+                window.scrollTo(0,document.documentElement.scrollHeight);
+                
+                chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 500+lazyLoadScrollTime*1000 },  /* allow time for final lazy loads to complete */
+                function(response)
+                {
+                    if (debugEnable) console.log("FINISHED -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scroll Y: " + scrolly);
+                    
+                    endtime = performance.now();
+                    
+                    if (debugEnable) console.log("LAZY LOAD TIME: " + (endtime-starttime)/1000 + "secs");
+                    
+                    window.scrollTo(0,origscrolly);
+                    
+                    panel = document.getElementById("savepage-lazyload-panel-container");
+                    
+                    if (panel != null) document.documentElement.removeChild(panel);
+                    
+                    if (cancelSave)
+                    {
+                        saveState = -1;
+                        
+                        chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+                    }
+                    else
+                    {
+                        if (loadLazyImages) forceLazyImages();
+                        
+                        initializeBeforeSave();
+                    }
+                });
+            }
+        }); 
+    }
+    else if (lazyLoadType == 1)  /* shrink page */
+    {
+        saveState = 0;  /* lazy load */
+        
+        chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
+        
+        showLazyLoad();
+        
+        starttime = performance.now();
+        
+        htmlCssText = document.documentElement.style.cssText;
+        bodyCssText = document.body.style.cssText;
+        origScrollY = window.scrollY;
+        
+        scalex = 400/document.body.scrollWidth;
+        scaley = 0.025;
+        
+        originx = window.innerWidth/2;
+        originy = 10;
+        
+        window.scrollTo(0,document.body.scrollHeight);  /* trigger lazy load scripts in page */
+        window.scrollTo(0,0);
+        
+        document.documentElement.style.setProperty("background","#FFFFFF","important");
+        
+        document.body.style.setProperty("transform","scaleX(" + scalex + ") scaleY(" + scaley + ")","important");
+        document.body.style.setProperty("visibility","hidden","important");
+        
+        chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 500+lazyLoadShrinkTime*1000 },  /* allow time for page to settle after scroll - e.g. page with floating top bar that resizes when page scrolls */
+        function(response)
+        {
+            document.body.style.removeProperty("visibility");
+            document.body.style.setProperty("transform-origin",originx + "px " + originy + "px","important");
+            
+            lastscrollheight = document.body.scrollHeight;
+            
+            window.scrollTo(0,document.body.scrollHeight);  /* trigger lazy load scripts in page */
+            window.scrollTo(0,0);
+            
+            if (debugEnable) console.log("INITIAL  -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scale: " + scaley);
+            
+            chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 500+lazyLoadShrinkTime*1000 },  /* allow time for first lazy loads to complete */
+            function timer(response)
+            {
+                if (document.body.scrollHeight > lastscrollheight && document.body.scrollHeight*scaley < window.innerHeight && !skipLazyLoad && !cancelSave)
+                {
+                    if (debugEnable) console.log("GROWING  -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scale: " + scaley);
+                    
+                    lastscrollheight = document.body.scrollHeight;
+                    
+                    window.scrollTo(0,document.body.scrollHeight);
+                    window.scrollTo(0,0);
+                    
+                    chrome.runtime.sendMessage({ type: "setDelay", milliseconds: lazyLoadShrinkTime*1000 },  /* allow time for some more lazy loads to complete */
+                    function(response)
+                    {
+                        timer();
+                    });
+                }
+                else
+                {
+                    if (debugEnable) console.log("WAITING  -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scale: " + scaley);
+                    
+                    window.scrollTo(0,document.body.scrollHeight);
+                    window.scrollTo(0,0);
+                    
+                    chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 500+lazyLoadShrinkTime*1000 },  /* allow time for final lazy loads to complete */
+                    function(response)
+                    {
+                        if (debugEnable) console.log("FINISHED -  Inner Height: " + window.innerHeight + "  Scroll Height: " + document.body.scrollHeight + "  Scale: " + scaley);
+                        
+                        endtime = performance.now();
+                        
+                        if (debugEnable) console.log("LAZY LOAD TIME: " + (endtime-starttime)/1000 + "secs");
+                        
+                        panel = document.getElementById("savepage-lazyload-panel-container");
+                        
+                        if (panel != null) document.documentElement.removeChild(panel);
+                        
+                        if (skipLazyLoad || cancelSave) undoShrinkPage();
+                        
+                        if (cancelSave)
+                        {
+                            saveState = -1;
+                            
+                            chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+                        }
+                        else
+                        {
+                            if (loadLazyImages) forceLazyImages();
+                            
+                            initializeBeforeSave();
+                        }
+                    });
+                }
+            });
+        });
+    }
 }
 
-function nameCrossFrames(depth,frame,element)
+function forceLazyImages()
 {
-    var i;
-    
-    /* Handle nested frames and child elements */
-    
-    if (element.localName == "iframe" || element.localName == "frame")  /* frame elements */
+    document.querySelectorAll("img").forEach(
+    function (element)
     {
-        if (depth < maxFrameDepth)
+        /* Force loading of images with loading="lazy" attributes */
+        
+        if (element.getAttribute("loading") == "lazy")
         {
-            try
-            {
-                if (element.contentDocument.documentElement != null)  /* in case web page not fully loaded before naming */
-                {
-                    nameCrossFrames(depth+1,element.contentWindow,element.contentDocument.documentElement);
-                }
-            }
-            catch (e)  /* attempting cross-domain web page access */
-            {
-                if (retainCrossFrames)
-                {
-                    if (!element.name) element.setAttribute("name","savepage-frame-" + Math.trunc(Math.random()*1000000000));
-                    
-                    // console.log("Main  - Cross - " + depth + " - " + (element.name + "                         ").substr(0,25) + " - " +
-                                 // (element.src + "                                                            ").replace(/\:/g,"").substr(0,80));  /*???*/
-                }
-            }
+            element.removeAttribute("loading");
+            element.setAttribute("data-savepage-loading","lazy");
         }
-    }
-    else
+        
+        /* Force loading of images managed by lazy load JS libraries */
+        /* Changes are the same as if the page was scrolled by the user */
+        
+        if (element.getAttribute("data-src")) element.setAttribute("src",element.getAttribute("data-src"));
+        else if (element.getAttribute("data-original")) element.setAttribute("src",element.getAttribute("data-original"));
+        else if (element.getAttribute("data-normal")) element.setAttribute("src",element.getAttribute("data-normal"));
+        
+        if (element.getAttribute("data-srcset")) element.setAttribute("srcset",element.getAttribute("data-srcset"));
+        else if (element.getAttribute("data-original-set")) element.setAttribute("srcset",element.getAttribute("data-original-set"));
+    });
+}
+
+function showLazyLoad()
+{
+    var parser,lazyloaddoc,container;
+    
+    /* Parse lazy load document */
+    
+    parser = new DOMParser();
+    lazyloaddoc = parser.parseFromString(lazyloadPanel,"text/html");
+    
+    /* Create container element */
+    
+    container = document.createElement("div");
+    container.setAttribute("id","savepage-lazyload-panel-container");
+    document.documentElement.appendChild(container);
+    
+    /* Append lazy load elements */
+    
+    container.appendChild(lazyloaddoc.getElementById("savepage-lazyload-panel-overlay"));
+    
+    /* Add listeners for buttons */
+    
+    document.getElementById("savepage-lazyload-panel-skip").addEventListener("click",clickSkip,false);
+    document.getElementById("savepage-lazyload-panel-cancel").addEventListener("click",clickCancel,false);
+    
+    /* Focus continue button */
+    
+    document.getElementById("savepage-lazyload-panel-skip").focus();
+    
+    /* Select this tab */
+    
+    chrome.runtime.sendMessage({ type: "selectTab" });
+    
+    function clickSkip()
     {
-        for (i = 0; i < element.children.length; i++)
-            if (element.children[i] != null)  /* in case web page not fully loaded before finding */
-                nameCrossFrames(depth,frame,element.children[i]);
+        skipLazyLoad = true;
     }
+    
+    function clickCancel()            
+    {
+        cancelSave = true;
+    }
+}
+
+/************************************************************************/
+
+/* Initialize before save */
+
+function initializeBeforeSave()
+{
+    /* Initialize resources */
+    
+    frameKey.length = 0;
+    frameURL.length = 0;
+    frameHTML.length = 0;
+    frameFonts.length = 0;
+    
+    resourceLocation.length = 0;
+    resourceReferrer.length = 0;
+    resourceMimeType.length = 0;
+    resourceCharSet.length = 0;
+    resourcePassive.length = 0;
+    resourceContent.length = 0;
+    resourceStatus.length = 0;
+    resourceReason.length = 0;
+    resourceRemembered.length = 0;
+    resourceReplaced.length = 0;
+    resourceCSSRemembered.length = 0;
+    resourceCSSFrameKeys.length = 0;
+    
+    firstIconLocation = "";
+    rootIconLocation = "";
+    
+    enteredComments = "";
+    
+    htmlStrings.length = 0;
+    
+    htmlStrings[0] = "\uFEFF";  /* UTF-8 Byte Order Mark (BOM) - 0xEF 0xBB 0xBF */
+    
+    /* Identify all frames */
+    
+    chrome.runtime.sendMessage({ type: "requestFrames" });
+    
+    chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 200 },  /* allow time for all frames to reply */
+    function(response)
+    {
+        var i;
+        
+        // for (i = 0; i < frameKey.length; i++)
+        // {
+            // console.log("FRAME - " + (" " + i).substr(-2) + " - " + (frameKey[i] + "              ").substr(0,14) + " - " +
+                        // (frameURL[i] + "                                                            ").replace(/\:/g,"").substr(0,80));
+        // }
+        
+        gatherStyleSheets();
+    });
 }
 
 /************************************************************************/
@@ -480,21 +929,23 @@ function gatherStyleSheets()
 {
     passNumber = 1;
     
-    chrome.runtime.sendMessage({ type: "setSaveBadge", text: "SAVE", color: "#E00000" });
+    saveState = 1;  /* first pass */
+    
+    chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
     
     timeStart[1] = performance.now();
     
-    findStyleSheets(0,window,document.documentElement,false);
+    findStyleSheets(0,window,document.documentElement);
     
     timeFinish[1] = performance.now();
     
     loadResources();
 }
 
-function findStyleSheets(depth,frame,element,crossorigin)
+function findStyleSheets(depth,frame,element)
 {
-    var i,baseuri,charset,csstext,regex,parser,framedoc;
-    var matches = new Array();
+    var i,baseuri,charset,csstext,regex,parser,framedoc,shadowroot;
+    var matches = [];
     
     /* External style sheet imported in <style> element */
     
@@ -514,7 +965,7 @@ function findStyleSheets(depth,frame,element,crossorigin)
             {
                 matches[1] = removeQuotes(matches[1]);
                 
-                if (!isSchemeDataOrMozExtension(matches[1]))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(matches[1]))
                 {
                     rememberURL(matches[1],baseuri,"text/css",charset,false);
                 }
@@ -524,13 +975,13 @@ function findStyleSheets(depth,frame,element,crossorigin)
     
     /* External style sheet referenced in <link> element */
     
-    else if (element.localName == "link")
+    else if (element.localName == "link" && !(element.parentElement instanceof SVGElement))  /* <link> is invalid inside <svg> */
     {
-        if (element.rel.toLowerCase() == "stylesheet" && element.getAttribute("href") != "" && element.href != "")  /* href attribute and property may be different */
+        if (element.rel.toLowerCase().indexOf("stylesheet") >= 0 && element.getAttribute("href"))
         {
             if (!element.disabled)
             {
-                if (!isSchemeDataOrMozExtension(element.href))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.href))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
@@ -553,24 +1004,24 @@ function findStyleSheets(depth,frame,element,crossorigin)
             {
                 if (element.contentDocument.documentElement != null)  /* in case web page not fully loaded before finding */
                 {
-                    findStyleSheets(depth+1,element.contentWindow,element.contentDocument.documentElement,crossorigin);
+                    findStyleSheets(depth+1,element.contentWindow,element.contentDocument.documentElement);
                 }
             }
             catch (e)  /* attempting cross-domain web page access */
             {
                 if (retainCrossFrames)
                 {
-                    for (i = 0; i < crossFrameName.length; i++)
+                    for (i = 0; i < frameKey.length; i++)
                     {
-                        if (crossFrameName[i] == element.name) break;
+                        if (frameKey[i] == element.getAttribute("data-savepage-key")) break;
                     }
                     
-                    if (i != crossFrameName.length)
+                    if (i != frameKey.length)
                     {
                         parser = new DOMParser();
-                        framedoc = parser.parseFromString(crossFrameHTML[i],"text/html");
+                        framedoc = parser.parseFromString(frameHTML[i],"text/html");
                         
-                        findStyleSheets(depth+1,window,framedoc.documentElement,true);
+                        findStyleSheets(depth+1,null,framedoc.documentElement);
                     }
                 }
             }
@@ -578,9 +1029,26 @@ function findStyleSheets(depth,frame,element,crossorigin)
     }
     else
     {
+        /* Handle shadow child elements */
+        
+        if (isFirefox) shadowroot = element.shadowRoot || element.openOrClosedShadowRoot;
+        else shadowroot = element.shadowRoot || ((chrome.dom && element instanceof HTMLElement) ? chrome.dom.openOrClosedShadowRoot(element) : null);
+        
+        if (shadowroot != null)
+        {
+            if (shadowElements.indexOf(element.localName) < 0)  /* ignore elements with built-in Shadow DOM */
+            {
+                for (i = 0; i < shadowroot.children.length; i++)
+                    if (shadowroot.children[i] != null)  /* in case web page not fully loaded before finding */
+                        findStyleSheets(depth,frame,shadowroot.children[i]);
+            }
+        }
+        
+        /* Handle normal child elements */
+        
         for (i = 0; i < element.children.length; i++)
             if (element.children[i] != null)  /* in case web page not fully loaded before finding */
-                findStyleSheets(depth,frame,element.children[i],crossorigin);
+                findStyleSheets(depth,frame,element.children[i]);
     }
 }
 
@@ -590,13 +1058,13 @@ function findStyleSheets(depth,frame,element,crossorigin)
 
 function gatherOtherResources()
 {
-    var loadedfonts = new Array();
+    var loadedfonts = [];
     
     passNumber = 2;
     
-    iconFound = false;
+    saveState = 2;  /* second pass */
     
-    chrome.runtime.sendMessage({ type: "setSaveBadge", text: "SAVE", color: "#A000D0" });
+    chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
     
     timeStart[2] = performance.now();
     
@@ -609,38 +1077,38 @@ function gatherOtherResources()
         }
     });
     
-    findOtherResources(0,window,document.documentElement,false,false,loadedfonts);
+    findOtherResources(0,window,document.documentElement,false,false,loadedfonts,"0");
     
     timeFinish[2] = performance.now();
     
     loadResources();
 }
 
-function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts)
+function findOtherResources(depth,frame,element,crossframe,nosrcframe,loadedfonts,framekey)
 {
-    var i,j,displayed,style,csstext,baseuri,charset,currentsrc,passive,regex,location,parser,framedoc;
-    var matches = new Array();
+    var i,j,displayed,style,csstext,baseuri,charset,dupelement,dupsheet,currentsrc,passive,documenturi,location,origurl,newurl,subframekey,parser,framedoc,shadowroot;
+    var subloadedfonts = [];
     
-    if (isFirefox && ffVersion <= 54 && crossorigin)
+    /* Determine if element is displayed */
+    
+    if (crossframe)
     {
-        /* In cross-origin frames, the passed-in frame is actually the page window,      */
-        /* instead of the frame window, because the frame window is not accessible.      */
-        /* This means that the getComputedStyle() function from the page window is used. */
-        /* This should work, since all getComputedStyle() functions should be the same.  */
-        /* With Firefox 51-54, this causes large delays and may return incorrect styles. */
+        /* In a cross-origin frame, the document created by DOMParser */
+        /* does not have an associated frame window, which means that */
+        /* the window.getComputedStyle() function cannot be called.   */
         
-        /* The workaround is to set displayed true and to force saving of all CSS images. */
+        /* Assume all elements are displayed and force saving of all CSS images */
         
         displayed = true;
     }
-    else if ((style = frame.getComputedStyle(element)) == null) displayed = true;
+    else if ((style = frame.getComputedStyle(element)) == null) displayed = true;  /* should not happen */
     else
     {
-        displayed = (style.getPropertyValue("display") != "none");
+        displayed = (style.getPropertyValue("display") != "none");  /* element not collapsed */
         
         /* External images referenced in any element's computed style */
         
-        if ((menuAction == 2 || (menuAction == 1 && !saveCSSImagesAll) || menuAction == 0) && displayed)
+        if ((savedItems == 0 || savedItems == 1 || (savedItems == 2 && !saveCSSImagesAll)) && displayed)
         {
             csstext = "";
             
@@ -650,7 +1118,8 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
             csstext += style.getPropertyValue("cursor") + " ";
             csstext += style.getPropertyValue("filter") + " ";
             csstext += style.getPropertyValue("clip-path") + " ";
-            csstext += style.getPropertyValue("mask") + " ";
+            csstext += style.getPropertyValue("mask-image") + " ";
+            csstext += style.getPropertyValue("-webkit-mask-image") + " ";
             
             style = frame.getComputedStyle(element,"::before");
             csstext += style.getPropertyValue("background-image") + " ";
@@ -660,7 +1129,8 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
             csstext += style.getPropertyValue("content") + " ";
             csstext += style.getPropertyValue("filter") + " ";
             csstext += style.getPropertyValue("clip-path") + " ";
-            csstext += style.getPropertyValue("mask") + " ";
+            csstext += style.getPropertyValue("mask-image") + " ";
+            csstext += style.getPropertyValue("-webkit-mask-image") + " ";
             
             style = frame.getComputedStyle(element,"::after");
             csstext += style.getPropertyValue("background-image") + " ";
@@ -670,7 +1140,8 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
             csstext += style.getPropertyValue("content") + " ";
             csstext += style.getPropertyValue("filter") + " ";
             csstext += style.getPropertyValue("clip-path") + " ";
-            csstext += style.getPropertyValue("mask") + " ";
+            csstext += style.getPropertyValue("mask-image") + " ";
+            csstext += style.getPropertyValue("-webkit-mask-image") + " ";
             
             style = frame.getComputedStyle(element,"::first-letter");
             csstext += style.getPropertyValue("background-image") + " ";
@@ -681,17 +1152,7 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
             
             baseuri = element.ownerDocument.baseURI;
             
-            regex = /url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\)/gi;  /* image url() */
-            
-            while ((matches = regex.exec(csstext)) != null)
-            {
-                matches[1] = removeQuotes(matches[1]);
-                
-                if (!isSchemeDataOrMozExtension(matches[1]))  /* exclude existing data uri or moz-extension url */
-                {
-                    rememberURL(matches[1],baseuri,"image/png","",false);
-                }
-            }
+            rememberCSSImageURLs(csstext,baseuri,framekey);
         }
     }
     
@@ -699,23 +1160,13 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     if (element.hasAttribute("style"))
     {
-        if ((menuAction == 1 && saveCSSImagesAll) || (isFirefox && ffVersion <= 54 && crossorigin))
+        if ((savedItems == 2 && saveCSSImagesAll) || crossframe)
         {
             csstext = element.getAttribute("style");
             
             baseuri = element.ownerDocument.baseURI;
             
-            regex = /url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\)/gi;  /* image url() */
-            
-            while ((matches = regex.exec(csstext)) != null)
-            {
-                matches[1] = removeQuotes(matches[1]);
-                
-                if (!isSchemeDataOrMozExtension(matches[1]))  /* exclude existing data uri or moz-extension url */
-                {
-                    rememberURL(matches[1],baseuri,"image/png","",false);
-                }
-            }
+            rememberCSSImageURLs(csstext,baseuri,framekey);
         }
     }
     
@@ -723,18 +1174,18 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     if (element.localName == "script")
     {
-        if (element.src != "")
+        if ((savedItems == 2 && saveScripts) && !crossframe && !nosrcframe)
         {
-            if ((menuAction == 1 && saveScripts) && !crossorigin && !nosource)
+            if (element.getAttribute("src"))
             {
-                if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.src))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
                     if (element.charset != "") charset = element.charset;
                     else charset = element.ownerDocument.characterSet;
                     
-                    rememberURL(element.src,baseuri,"application/javascript",charset,false);
+                    rememberURL(element.src,baseuri,"text/javascript",charset,false);
                 }
             }
         }
@@ -746,24 +1197,53 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     {
         if (!element.disabled)
         {
-            csstext = element.textContent;
+            if (element.hasAttribute("data-savepage-sheetrules")) csstext = element.getAttribute("data-savepage-sheetrules");
+            else
+            {
+                try
+                {
+                    /* Count rules in element.textContent by creating duplicate element */
+                    
+                    dupelement = element.ownerDocument.createElement("style");
+                    dupelement.textContent = element.textContent;
+                    element.ownerDocument.body.appendChild(dupelement);
+                    dupsheet = dupelement.sheet;
+                    dupelement.remove();
+                    
+                    /* There may be rules in element.sheet.cssRules that are not in element.textContent */
+                    /* For example if the page uses CSS-in-JS Libraries */
+                    
+                    if (dupsheet.cssRules.length != element.sheet.cssRules.length)
+                    {
+                        csstext = "";
+                        
+                        for (i = 0; i < element.sheet.cssRules.length; i++)
+                            csstext += element.sheet.cssRules[i].cssText + "\n";
+                    }
+                    else csstext = element.textContent;
+                }
+                catch (e)  /* sheet.cssRules does not exist or cross-origin style sheet */
+                {
+                    csstext = element.textContent;
+                }
+            }
             
             baseuri = element.ownerDocument.baseURI;
             
-            findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts);
+            rememberCSSURLsInStyleSheet(csstext,baseuri,crossframe,loadedfonts,[],framekey);
         }
     }
     
     /* External images or fonts referenced in <link> element */
     /* External icon referenced in <link> element */
     
-    else if (element.localName == "link")
+    else if (element.localName == "link" && !(element.parentElement instanceof SVGElement))  /* <link> is invalid inside <svg> */
     {
-        if (element.rel.toLowerCase() == "stylesheet" && element.getAttribute("href") != "" && element.href != "")  /* href attribute and property may be different */
+        if (element.rel.toLowerCase().indexOf("stylesheet") >= 0 && element.getAttribute("href"))
         {
             if (!element.disabled)
             {
-                if (!isSchemeDataOrMozExtension(element.href))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.href))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
@@ -773,6 +1253,8 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
                         
                         if (location != null)
                         {
+                            location = removeFragment(location);
+                            
                             for (i = 0; i < resourceLocation.length; i++)
                                 if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
                             
@@ -782,33 +1264,47 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
                                 
                                 baseuri = element.href;
                                 
-                                findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts);
+                                rememberCSSURLsInStyleSheet(csstext,baseuri,crossframe,loadedfonts,[location],framekey);
                             }
                         }
                     }
                 }
             }
         }
-        else if ((element.rel.toLowerCase() == "icon" || element.rel.toLowerCase() == "shortcut icon") && element.href != "")
+        else if ((element.rel.toLowerCase() == "icon" || element.rel.toLowerCase() == "shortcut icon") && element.getAttribute("href"))
         {
-            iconFound = true;
-            
-            baseuri = element.ownerDocument.baseURI;
-            
-            rememberURL(element.href,baseuri,"image/vnd.microsoft.icon","",false);
+            if (replaceableResourceURL(element.href))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                rememberURL(element.href,baseuri,"image/vnd.microsoft.icon","",false);
+                
+                if (firstIconLocation == "")
+                {
+                    location = resolveURL(element.href,baseuri);
+                    
+                    if (location != null) firstIconLocation = location;
+                }
+            }
         }
+    }
+    
+    /* External location referenced in <a> or <area> element */
+    
+    else if ((element.localName == "a" && element instanceof HTMLElement) || element.localName == "area")
+    {
     }
     
     /* External image referenced in <body> element */
     
     else if (element.localName == "body")
     {
-        if (element.background != "")
+        if (element.getAttribute("background"))
         {
-            if (menuAction == 2 || (menuAction == 1 && saveHTMLImagesAll) ||
-                ((menuAction == 1 && !saveHTMLImagesAll) || menuAction == 0) && displayed)
+            if (savedItems == 1 || (savedItems == 2 && saveHTMLImagesAll) ||
+                (savedItems == 0 || (savedItems == 2 && !saveHTMLImagesAll)) && displayed)
             {
-                if (!isSchemeDataOrMozExtension(element.background))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.background))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
@@ -825,20 +1321,24 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
         /* currentSrc is set from src or srcset attributes on this <img> element */
         /* or from srcset attribute on <source> element inside <picture> element */
         
-        /* Firefox - workaround because currentSrc may be null string in cross-origin frames */
+        /* Firefox - workaround because element.currentSrc may be empty string in cross-origin frames */
         
-        currentsrc = (element.currentSrc == "") ? element.src : element.currentSrc;
+        currentsrc = (element.currentSrc != "") ? element.currentSrc : (element.getAttribute("src") ? element.src : "");
+        
+        /* Chrome - workaround because element.currentSrc may have wrong fragment identifier for SVG images */
+        
+        currentsrc = (element.currentSrc.indexOf("#") < 0) ? element.currentSrc : (element.getAttribute("src") ? element.src : "");
         
         if (currentsrc != "")
         {
-            if (menuAction == 2 || (menuAction == 1 && saveHTMLImagesAll) ||
-                ((menuAction == 1 && !saveHTMLImagesAll) || menuAction == 0) && displayed)
+            if (savedItems == 1 || (savedItems == 2 && saveHTMLImagesAll) ||
+                (savedItems == 0 || (savedItems == 2 && !saveHTMLImagesAll)) && displayed)
             {
-                if (!isSchemeDataOrMozExtension(currentsrc))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(currentsrc))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
-                    passive = !(element.parentElement.localName == "picture" || element.hasAttribute("srcset") || element.hasAttribute("crossorigin"));
+                    passive = !((element.parentElement && element.parentElement.localName == "picture") || element.hasAttribute("srcset") || element.hasAttribute("crossorigin"));
                     
                     rememberURL(currentsrc,baseuri,"image/png","",passive);
                 }
@@ -850,12 +1350,12 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     else if (element.localName == "input")
     {
-        if (element.type.toLowerCase() == "image" && element.src != "")
+        if (element.type.toLowerCase() == "image" && element.getAttribute("src"))
         {
-            if (menuAction == 2 || (menuAction == 1 && saveHTMLImagesAll) ||
-                ((menuAction == 1 && !saveHTMLImagesAll) || menuAction == 0) && displayed)
+            if (savedItems == 1 || (savedItems == 2 && saveHTMLImagesAll) ||
+                (savedItems == 0 || (savedItems == 2 && !saveHTMLImagesAll)) && displayed)
             {
-                if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.src))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
@@ -869,13 +1369,13 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     else if (element.localName == "audio")
     {
-        if (element.src != "")
+        if (element.getAttribute("src"))
         {
             if (element.src == element.currentSrc)
             {
-                if (menuAction == 2 || (menuAction == 1 && saveHTMLAudioVideo))
+                if (savedItems == 1 || (savedItems == 2 && saveHTMLAudioVideo))
                 {
-                    if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
+                    if (replaceableResourceURL(element.src))
                     {
                         baseuri = element.ownerDocument.baseURI;
                         
@@ -892,13 +1392,13 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     else if (element.localName == "video")
     {
-        if (element.src != "")
+        if (element.getAttribute("src"))
         {
             if (element.src == element.currentSrc)
             {
-                if (menuAction == 2 || (menuAction == 1 && saveHTMLAudioVideo))
+                if (savedItems == 1 || (savedItems == 2 && saveHTMLAudioVideo))
                 {
-                    if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
+                    if (replaceableResourceURL(element.src))
                     {
                         baseuri = element.ownerDocument.baseURI;
                         
@@ -910,14 +1410,14 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
             }
         }
         
-        if (element.poster != "")
+        if (element.getAttribute("poster"))
         {
-            if (menuAction == 2 || (menuAction == 1 && saveHTMLAudioVideo))
+            if (savedItems == 1 || (savedItems == 2 && saveHTMLAudioVideo))
             {
-                if (menuAction == 2 || (menuAction == 1 && saveHTMLImagesAll) ||
-                    ((menuAction == 1 && !saveHTMLImagesAll) || menuAction == 0) && displayed)
+                if (savedItems == 1 || (savedItems == 2 && saveHTMLImagesAll) ||
+                    (savedItems == 0 || (savedItems == 2 && !saveHTMLImagesAll)) && displayed)
                 {
-                    if (!isSchemeDataOrMozExtension(element.poster))  /* exclude existing data uri or moz-extension url */
+                    if (replaceableResourceURL(element.poster))
                     {
                         baseuri = element.ownerDocument.baseURI;
                         
@@ -932,22 +1432,25 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     else if (element.localName == "source")
     {
-        if (element.parentElement.localName == "audio" || element.parentElement.localName == "video")
+        if (element.parentElement)
         {
-            if (element.src != "")
+            if (element.parentElement.localName == "audio" || element.parentElement.localName == "video")
             {
-                if (element.src == element.parentElement.currentSrc)
+                if (element.getAttribute("src"))
                 {
-                    if (menuAction == 2 || (menuAction == 1 && saveHTMLAudioVideo))
+                    if (element.src == element.parentElement.currentSrc)
                     {
-                        if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
+                        if (savedItems == 1 || (savedItems == 2 && saveHTMLAudioVideo))
                         {
-                            baseuri = element.ownerDocument.baseURI;
-                            
-                            passive = !element.parentElement.hasAttribute("crossorigin");
-                            
-                            if (element.parentElement.localName == "audio") rememberURL(element.src,baseuri,"audio/mpeg","",passive);
-                            else if (element.parentElement.localName == "video") rememberURL(element.src,baseuri,"video/mp4","",passive);
+                            if (replaceableResourceURL(element.src))
+                            {
+                                baseuri = element.ownerDocument.baseURI;
+                                
+                                passive = !element.parentElement.hasAttribute("crossorigin");
+                                
+                                if (element.parentElement.localName == "audio") rememberURL(element.src,baseuri,"audio/mpeg","",passive);
+                                else if (element.parentElement.localName == "video") rememberURL(element.src,baseuri,"video/mp4","",passive);
+                            }
                         }
                     }
                 }
@@ -959,11 +1462,11 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     else if (element.localName == "track")
     {
-        if (element.src != "")
+        if (element.getAttribute("src"))
         {
-            if (menuAction == 2 || (menuAction == 1 && saveHTMLAudioVideo))
+            if (savedItems == 1 || (savedItems == 2 && saveHTMLAudioVideo))
             {
-                if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.src))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
@@ -979,11 +1482,11 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     else if (element.localName == "object")
     {
-        if (element.data != "")
+        if (element.getAttribute("data"))
         {
-            if (menuAction == 2 || (menuAction == 1 && saveHTMLObjectEmbed))
+            if (savedItems == 1 || (savedItems == 2 && saveHTMLObjectEmbed))
             {
-                if (!isSchemeDataOrMozExtension(element.data))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.data))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
@@ -997,15 +1500,47 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     
     else if (element.localName == "embed")
     {
-        if (element.src != "")
+        if (element.getAttribute("src"))
         {
-            if (menuAction == 2 || (menuAction == 1 && saveHTMLObjectEmbed))
+            if (savedItems == 1 || (savedItems == 2 && saveHTMLObjectEmbed))
             {
-                if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(element.src))
                 {
                     baseuri = element.ownerDocument.baseURI;
                     
                     rememberURL(element.src,baseuri,"application/octet-stream","",false);
+                }
+            }
+        }
+    }
+    
+    /* SVG - External location referenced in <a> element */
+    
+    else if (element.localName == "a" && element instanceof SVGElement)
+    {
+    }
+    
+    /* SVG - External resource referenced in other SVG elements */
+    
+    else if (hrefSVGElements.indexOf(element.localName) >= 0 && element instanceof SVGElement)
+    {
+        if (element.getAttribute("href") || element.getAttribute("xlink:href"))
+        {
+            baseuri = element.ownerDocument.baseURI;
+            
+            documenturi = element.ownerDocument.documentURI;
+            
+            origurl = element.getAttribute("href") || element.getAttribute("xlink:href");
+            
+            newurl = adjustURL(origurl,baseuri,documenturi);
+            
+            if (newurl.substr(0,1) != "#")  /* not fragment only */
+            {
+                if (replaceableResourceURL(element.href.baseVal))
+                {
+                    charset = element.ownerDocument.characterSet;
+                    
+                    rememberURL(element.href.baseVal,baseuri,"image/svg+xml",charset,false);
                 }
             }
         }
@@ -1017,30 +1552,42 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     {
         if (depth < maxFrameDepth)
         {
-            nosource = nosource || (element.src == "" && element.srcdoc == "");
+            if (element.localName == "iframe") nosrcframe = nosrcframe || (!element.getAttribute("src") && !element.getAttribute("srcdoc"));
+            else nosrcframe = nosrcframe || !element.getAttribute("src");
+            
+            subframekey = element.getAttribute("data-savepage-key");
             
             try
             {
                 if (element.contentDocument.documentElement != null)  /* in case web page not fully loaded before finding */
                 {
-                    findOtherResources(depth+1,element.contentWindow,element.contentDocument.documentElement,crossorigin,nosource,loadedfonts);
+                    element.contentDocument.fonts.forEach(  /* CSS Font Loading Module */
+                    function(font)
+                    {
+                        if (font.status == "loaded")  /* font is being used in this document */
+                        {
+                            subloadedfonts.push({ family: font.family, weight: font.weight, style: font.style, stretch: font.stretch });
+                        }
+                    });
+                    
+                    findOtherResources(depth+1,element.contentWindow,element.contentDocument.documentElement,crossframe,nosrcframe,subloadedfonts,subframekey);
                 }
             }
             catch (e)  /* attempting cross-domain web page access */
             {
                 if (retainCrossFrames)
                 {
-                    for (i = 0; i < crossFrameName.length; i++)
+                    for (i = 0; i < frameKey.length; i++)
                     {
-                        if (crossFrameName[i] == element.name) break;
+                        if (frameKey[i] == subframekey) break;
                     }
                     
-                    if (i != crossFrameName.length)
+                    if (i != frameKey.length)
                     {
                         parser = new DOMParser();
-                        framedoc = parser.parseFromString(crossFrameHTML[i],"text/html");
+                        framedoc = parser.parseFromString(frameHTML[i],"text/html");
                         
-                        findOtherResources(depth+1,window,framedoc.documentElement,true,nosource,crossFrameFonts[i]);
+                        findOtherResources(depth+1,null,framedoc.documentElement,true,nosrcframe,frameFonts[i],subframekey);
                     }
                 }
             }
@@ -1048,33 +1595,59 @@ function findOtherResources(depth,frame,element,crossorigin,nosource,loadedfonts
     }
     else
     {
+        /* Handle shadow child elements */
+        
+        if (isFirefox) shadowroot = element.shadowRoot || element.openOrClosedShadowRoot;
+        else shadowroot = element.shadowRoot || ((chrome.dom && element instanceof HTMLElement) ? chrome.dom.openOrClosedShadowRoot(element) : null);
+        
+        if (shadowroot != null)
+        {
+            if (shadowElements.indexOf(element.localName) < 0)  /* ignore elements with built-in Shadow DOM */
+            {
+                for (i = 0; i < shadowroot.children.length; i++)
+                    if (shadowroot.children[i] != null)  /* in case web page not fully loaded before finding */
+                        findOtherResources(depth,frame,shadowroot.children[i],crossframe,nosrcframe,loadedfonts,framekey);
+            }
+        }
+        
+        /* Handle normal child elements */
+        
         for (i = 0; i < element.children.length; i++)
             if (element.children[i] != null)  /* in case web page not fully loaded before finding */
-                findOtherResources(depth,frame,element.children[i],crossorigin,nosource,loadedfonts);
+                findOtherResources(depth,frame,element.children[i],crossframe,nosrcframe,loadedfonts,framekey);
                 
+        /* Remember location of favicon in website root */
+        
         if (element.localName == "head" && depth == 0)
         {
-            if (!iconFound)
+            if (firstIconLocation == "")
             {
                 baseuri = element.ownerDocument.baseURI;
                 
                 rememberURL("/favicon.ico",baseuri,"image/vnd.microsoft.icon","",false);
+                
+                location = resolveURL("/favicon.ico",baseuri);
+                
+                if (location != null) rootIconLocation = location;
             }
         }
     }
 }
 
-function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
+function rememberCSSURLsInStyleSheet(csstext,baseuri,crossframe,loadedfonts,importstack,framekey)
 {
     var i,regex,location,fontfamily,fontweight,fontstyle,fontstretch,fontmatches;
-    var includewoff,usedfilefound,wofffilefound,srcregex,urlregex,fontfiletype;
-    var matches = new Array();
-    var propmatches = new Array();
-    var srcmatches = new Array();
-    var urlmatches = new Array();
+    var includeall,includewoff,usedfilefound,wofffilefound,srcregex,urlregex,fontfiletype;
+    var matches = [];
+    var propmatches = [];
+    var srcmatches = [];
+    var urlmatches = [];
+    var fontweightvalues = ["normal","bold","bolder","lighter","100","200","300","400","500","600","700","800","900"];
+    var fontstretchvalues = ["normal","ultra-condensed","extra-condensed","condensed","semi-condensed","semi-expanded","expanded","extra-expanded","ultra-expanded"];
+    var fontstylevalues = ["normal","italic","oblique"];
     
     /* @import url() or */
-    /* @font-face rule or */
+    /* @font-face rule with font url()'s or */
     /* image url() or */
     /* avoid matches inside double-quote strings or */
     /* avoid matches inside single-quote strings or */
@@ -1087,14 +1660,14 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
                        /(?:'(?:\\'|[^'])*')|/.source +
                        /(?:\/\*(?:\*[^\/]|[^\*])*?\*\/)/.source,
                        "gi");
-                       
+    
     while ((matches = regex.exec(csstext)) != null)  /* style sheet imported into style sheet */
     {
         if (matches[0].substr(0,7).toLowerCase() == "@import")  /* @import url() */
         {
             matches[1] = removeQuotes(matches[1]);
             
-            if (!isSchemeDataOrMozExtension(matches[1]))  /* exclude existing data uri or moz-extension url */
+            if (replaceableResourceURL(matches[1]))
             {
                 if (baseuri != null)
                 {
@@ -1102,12 +1675,21 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
                     
                     if (location != null)
                     {
+                        location = removeFragment(location);
+                        
                         for (i = 0; i < resourceLocation.length; i++)
                             if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
                         
                         if (i < resourceLocation.length)  /* style sheet found */
                         {
-                            findCSSURLsInStyleSheet(resourceContent[i],resourceLocation[i],crossorigin,loadedfonts);
+                            if (importstack.indexOf(location) < 0)
+                            {
+                                importstack.push(location);
+                                
+                                rememberCSSURLsInStyleSheet(resourceContent[i],resourceLocation[i],crossframe,loadedfonts,importstack,framekey);
+                                
+                                importstack.pop();
+                            }
                         }
                     }
                 }
@@ -1115,19 +1697,26 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
         }
         else if (matches[0].substr(0,10).toLowerCase() == "@font-face")  /* @font-face rule */
         {
-            includewoff = (menuAction == 2 || (menuAction == 1 && saveCSSFontsWoff));
+            includeall = (savedItems == 2 && saveCSSFontsAll);
+            includewoff = (savedItems == 1 || (savedItems == 2 && saveCSSFontsWoff));
             
             propmatches = matches[2].match(/font-family\s*:\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s;}]+(?: [^\s;}]+)*))/i);
-            if (propmatches == null) fontfamily = ""; else fontfamily = removeQuotes(propmatches[1]).toLowerCase();
+            if (propmatches == null) fontfamily = ""; else fontfamily = removeQuotes(unescapeCSSValue(propmatches[1])).toLowerCase();
             
             propmatches = matches[2].match(/font-weight\s*:\s*([^\s;}]*)/i);
-            if (propmatches == null) fontweight = "normal"; else fontweight = propmatches[1].toLowerCase();
+            if (propmatches == null) fontweight = "normal";
+            else if (fontweightvalues.indexOf(propmatches[1].toLowerCase()) < 0) fontweight = "normal";
+            else fontweight = propmatches[1].toLowerCase();
             
             propmatches = matches[2].match(/font-style\s*:\s*([^\s;}]*)/i);
-            if (propmatches == null) fontstyle = "normal"; else fontstyle = propmatches[1].toLowerCase();
+            if (propmatches == null) fontstyle = "normal";
+            else if (fontstylevalues.indexOf(propmatches[1].toLowerCase()) < 0) fontstyle = "normal";
+            else fontstyle = propmatches[1].toLowerCase();
             
             propmatches = matches[2].match(/font-stretch\s*:\s*([^\s;}]*)/i);
-            if (propmatches == null) fontstretch = "normal"; else fontstretch = propmatches[1].toLowerCase();
+            if (propmatches == null) fontstretch = "normal";
+            else if (fontstretchvalues.indexOf(propmatches[1].toLowerCase()) < 0) fontstretch = "normal";
+            else fontstretch = propmatches[1].toLowerCase();
             
             fontmatches = false;
             
@@ -1144,7 +1733,7 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
                 
                 srcregex = /src:([^;}]*)[;}]/gi;  /* @font-face src list */
                 
-                while ((srcmatches = srcregex.exec(matches[2])) != null)  /* src: list of font file URL's */
+                while ((srcmatches = srcregex.exec(matches[2])) != null)  /* src: list of font file URLs */
                 {
                     urlregex = /url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\)(?:\s+format\(([^)]*)\))?/gi;  /* font url() and optional font format() list */
                     
@@ -1152,7 +1741,7 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
                     {
                         urlmatches[1] = removeQuotes(urlmatches[1]);  /* url */
                         
-                        if (!isSchemeDataOrMozExtension(urlmatches[1]))  /* exclude existing data uri or moz-extension url */
+                        if (replaceableResourceURL(urlmatches[1]))
                         {
                             fontfiletype = "";
                             
@@ -1164,7 +1753,6 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
                                 else if (urlmatches[2].indexOf("'woff'") >= 0) fontfiletype = "woff";  /* all browsers */
                                 else if (urlmatches[2].indexOf("'truetype'") >= 0) fontfiletype = "ttf";  /* all browsers */
                                 else if (urlmatches[2].indexOf("'opentype'") >= 0) fontfiletype = "otf";  /* all browsers */
-                                else if (urlmatches[2].indexOf("'svg'") >= 0 && !isFirefox) fontfiletype = "svg";  /* Chrome & Opera */
                             }
                             else
                             {
@@ -1172,7 +1760,6 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
                                 else if (urlmatches[1].indexOf(".woff") >= 0 && urlmatches[1].indexOf(".woff2") < 0) fontfiletype = "woff";  /* all browsers */
                                 else if (urlmatches[1].indexOf(".ttf") >= 0) fontfiletype = "ttf";  /* all browsers */
                                 else if (urlmatches[1].indexOf(".otf") >= 0) fontfiletype = "otf";  /* all browsers */
-                                else if (urlmatches[1].indexOf(".svg") >= 0 && !isFirefox) fontfiletype = "svg";  /* Chrome & Opera */
                             }
                             
                             if (fontfiletype != "")
@@ -1191,25 +1778,29 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
                                     
                                     rememberURL(urlmatches[1],baseuri,"application/font-woff","",false);
                                 }
+                                else if (includeall)
+                                {
+                                    rememberURL(urlmatches[1],baseuri,"application/font-woff","",false);
+                                }
                             }
                             
-                            if (wofffilefound || (!includewoff && usedfilefound)) break;
+                            if (!includeall && (wofffilefound || (!includewoff && usedfilefound))) break;
                         }
                     }
                     
-                    if (wofffilefound || (!includewoff && usedfilefound)) break;
+                    if (!includeall && (wofffilefound || (!includewoff && usedfilefound))) break;
                 }
             }
         }
         else if (matches[0].substr(0,4).toLowerCase() == "url(")  /* image url() */
         {
-            if ((menuAction == 1 && saveCSSImagesAll) || (isFirefox && ffVersion <= 54 && crossorigin))
+            if ((savedItems == 2 && saveCSSImagesAll) || crossframe)
             {
                 matches[3] = removeQuotes(matches[3]);
                 
-                if (!isSchemeDataOrMozExtension(matches[3]))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(matches[3]))
                 {
-                    rememberURL(matches[3],baseuri,"image/png","",false);
+                    rememberCSSImageURL(matches[3],baseuri,"image/png","",false,framekey);
                 }
             }
         }
@@ -1219,11 +1810,29 @@ function findCSSURLsInStyleSheet(csstext,baseuri,crossorigin,loadedfonts)
     }
 }
 
-function rememberURL(url,baseuri,mimetype,charset,passive)
+function rememberCSSImageURLs(csstext,baseuri,framekey)
+{
+    var regex;
+    var matches = [];
+    
+    regex = /url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\)/gi;  /* image url() */
+    
+    while ((matches = regex.exec(csstext)) != null)
+    {
+        matches[1] = removeQuotes(matches[1]);
+        
+        if (replaceableResourceURL(matches[1]))
+        {
+            rememberCSSImageURL(matches[1],baseuri,"image/png","",false,framekey);
+        }
+    }
+}
+
+function rememberCSSImageURL(url,baseuri,mimetype,charset,passive,framekey)
 {
     var i,location;
     
-    if (savedPage) return -1;  /* ignore new resources when re-saving */
+    if (pageType > 0) return -1;  /* saved page - ignore new resources when re-saving */
     
     if (baseuri != null)
     {
@@ -1231,13 +1840,19 @@ function rememberURL(url,baseuri,mimetype,charset,passive)
         
         if (location != null)
         {
+            baseuri = removeFragment(baseuri);
+            
+            location = removeFragment(location);
+            
+            if (location == "" || location == baseuri) return -1;
+            
             for (i = 0; i < resourceLocation.length; i++)
                 if (resourceLocation[i] == location) break;
             
             if (i == resourceLocation.length)  /* new resource */
             {
                 resourceLocation[i] = location;
-                resourceReferer[i] = baseuri;
+                resourceReferrer[i] = baseuri;
                 resourceMimeType[i] = mimetype;  /* default if load fails */
                 resourceCharSet[i] = charset;  /* default if load fails */
                 resourcePassive[i] = passive;
@@ -1246,67 +1861,231 @@ function rememberURL(url,baseuri,mimetype,charset,passive)
                 resourceReason[i] = "";
                 resourceRemembered[i] = 1;
                 resourceReplaced[i] = 0;
+                resourceCSSRemembered[i] = 1;
+                resourceCSSFrameKeys[i] = {};
+                resourceCSSFrameKeys[i][framekey] = true;
                 
                 return i;
             }
-            else resourceRemembered[i]++;  /* repeated resource */
+            else  /* repeated resource */
+            {
+                resourceRemembered[i]++;
+                resourceCSSRemembered[i]++;
+                resourceCSSFrameKeys[i][framekey] = true;
+            }
         }
     }
     
     return -1;
 }
 
+function rememberURL(url,baseuri,mimetype,charset,passive)
+{
+    var i,location;
+    
+    if (pageType > 0) return -1;  /* saved page - ignore new resources when re-saving */
+    
+    if (baseuri != null)
+    {
+        location = resolveURL(url,baseuri);
+        
+        if (location != null)
+        {
+            baseuri = removeFragment(baseuri);
+            
+            location = removeFragment(location);
+            
+            if (location == "" || location == baseuri) return -1;
+            
+            for (i = 0; i < resourceLocation.length; i++)
+                if (resourceLocation[i] == location) break;
+            
+            if (i == resourceLocation.length)  /* new resource */
+            {
+                resourceLocation[i] = location;
+                resourceReferrer[i] = baseuri;
+                resourceMimeType[i] = mimetype;  /* default if load fails */
+                resourceCharSet[i] = charset;  /* default if load fails */
+                resourcePassive[i] = passive;
+                resourceContent[i] = "";  /* default if load fails */
+                resourceStatus[i] = "pending";
+                resourceReason[i] = "";
+                resourceRemembered[i] = 1;
+                resourceReplaced[i] = 0;
+                resourceCSSRemembered[i] = 0;
+                resourceCSSFrameKeys[i] = {};
+                
+                return i;
+            }
+            else  /* repeated resource */
+            {
+                resourceRemembered[i]++;
+            }
+        }
+    }
+    
+    return -1;
+}
+
+function unescapeCSSValue(value)
+{
+    var regex,codepoint;
+    
+    regex = /\\(?:([0-9A-Fa-f]{1,6})|(.))/g;
+    
+    return value.replace(regex,_replaceEscapeSequences);
+    
+    function _replaceEscapeSequences(match,p1,p2,offset,string)
+    {
+        if (p2) return p2;  /* single-character escape sequence */
+        
+        codepoint = parseInt(p1,16);
+        
+        if (codepoint == 0x0000 || codepoint > 0x10FFFF) return "\uFFFD";  /* not Unicode code point */
+        if (codepoint >= 0xD800 && codepoint <= 0xDFFF) return "\uFFFD";  /* surrogate code point */
+        
+        return String.fromCodePoint(codepoint);  /* codepoint escape sequence */
+    }
+}
+
 /************************************************************************/
 
 /* After first or second pass - load resources */
 
-
 function loadResources()
 {
-    var i,documentURL,useCORS;
+    var i;
     
     timeStart[passNumber+3] = performance.now();
     
     resourceCount = 0;
     
     for (i = 0; i < resourceLocation.length; i++)
-    {
-        if (resourceStatus[i] == "pending") 
-        {
-            resourceCount++;
-            
-            documentURL = new URL(document.baseURI);
-            
-            useCORS = (resourceMimeType[i] == "application/font-woff");
-            
-            chrome.runtime.sendMessage({ type: "loadResource", index: i, location: resourceLocation[i], referer: resourceReferer[i],
-                                         passive: resourcePassive[i], pagescheme: documentURL.protocol, usecors: useCORS });
-        }
-    }
+        if (resourceStatus[i] == "pending") resourceCount++;
     
     if (resourceCount <= 0)
     {
         timeFinish[passNumber+3] = performance.now();
-    
+        
         if (passNumber == 1) gatherOtherResources();
-        else if (passNumber == 2) loadInfoBar();
+        else if (passNumber == 2) checkResources();
+    }
+    else
+    {
+        for (i = 0; i < resourceLocation.length; i++)
+        {
+            if (resourceStatus[i] == "pending") 
+            {
+                if (safeContentOrAllowedMixedContent(i))
+                {
+                     loadResource(i,resourceLocation[i],resourceReferrer[i],getReferrerPolicy());
+                }
+                else loadFailure(i,"mixed");
+            }
+        }
     }
 }
 
-function loadSuccess(index,content,contenttype,alloworigin)
+async function loadResource(index,location,referrer,referrerPolicy)
 {
-    var i,mimetype,charset,resourceURL,frameURL,csstext,baseuri,regex,documentURL;
-    var matches = new Array();
+    var controller,timeout,response;
+    var i,contentType,contentLength,mimetype,charset,buffer,byteArray,binaryString;
+    var matches = [];
     
-    /* Extract file MIME type and character set */
+    controller = new AbortController();
     
-    matches = contenttype.match(/([^;]+)/i);
-    if (matches != null) mimetype = matches[1].toLowerCase();
-    else mimetype = "";
+    timeout = window.setTimeout(
+    function()
+    {
+        controller.abort();
+    },maxResourceTime*1000);
     
-    matches = contenttype.match(/;charset=([^;]+)/i);
-    if (matches != null) charset = matches[1].toLowerCase();
-    else charset = "";
+    try  /* load resource in content script */
+    {
+        response = await fetch(location,{ method: "GET", mode: "cors", cache: "no-cache", referrer: referrer, referrerPolicy: referrerPolicy, signal: controller.signal });
+        
+        if (debugEnable) console.log("Content Fetch - index: " + index + " - status: " + response.status + " - referrer: " + referrer + " - policy: " + referrerPolicy + " - location: " + location);
+        
+        window.clearTimeout(timeout);
+        
+        if (response.status == 200)
+        {
+            contentType = response.headers.get("Content-Type");
+            if (contentType == null) contentType = "";
+            
+            contentLength = +response.headers.get("Content-Length");
+            if (contentLength == null) contentLength = 0;
+            
+            if (contentLength > maxResourceSize*1024*1024)
+            {
+                loadFailure(index,"maxsize");
+            }
+            else
+            {
+                matches = contentType.match(/([^;]+)/i);
+                if (matches != null) mimetype = matches[1].toLowerCase();
+                else mimetype = "";
+                
+                matches = contentType.match(/;charset=([^;]+)/i);
+                if (matches != null) charset = matches[1].toLowerCase();
+                else charset = "";
+                
+                buffer = await response.arrayBuffer();
+                
+                byteArray = new Uint8Array(buffer);
+                
+                binaryString = "";
+                for (i = 0; i < byteArray.byteLength; i++) binaryString += String.fromCharCode(byteArray[i]);
+                
+                loadSuccess(index,"",binaryString,mimetype,charset);
+            }
+        }
+        else  /* load resource in background script */
+        {
+            if (resourceMimeType[index] == "application/font-woff")
+            {
+                /* Fonts must be loaded with CORS - but cannot be sure of CORS in background script */
+                
+                loadFailure(index,"corsfail");
+            }
+            else
+            {
+                /* Most likely resource for <link>/<script>/<img>/<audio>/<video> element with crossorigin attribute requiring background fetch */
+                
+                chrome.runtime.sendMessage({ type: "loadResource", index: index, location: location, referrer: referrer, referrerPolicy: referrerPolicy });
+            }
+        }
+    }
+    catch (e)
+    {
+        window.clearTimeout(timeout);
+        
+        if (e.name == "AbortError")
+        {
+            loadFailure(index,"maxtime");
+        }
+        else  /* load resource in background script */
+        {
+            if (resourceMimeType[index] == "application/font-woff")
+            {
+                /* Fonts must be loaded with CORS - but cannot be sure of CORS in background script */
+                
+                loadFailure(index,"corsfail");
+            }
+            else
+            {
+                /* Most likely resource for <link>/<script>/<img>/<audio>/<video> element with crossorigin attribute requiring background fetch */
+                
+                chrome.runtime.sendMessage({ type: "loadResource", index: index, location: location, referrer: referrer, referrerPolicy: referrerPolicy });
+            }
+        }
+    }
+}
+
+function loadSuccess(index,reason,content,mimetype,charset)
+{
+    var i,resourceURL,frameURL,csstext,baseuri,regex,documentURL;
+    var matches = [];
     
     /* Process file based on expected MIME type */
     
@@ -1314,41 +2093,46 @@ function loadSuccess(index,content,contenttype,alloworigin)
     {
         case "application/font-woff":  /* font file */
             
-            /* CORS check required */
+            /* font file - fall through */
             
-            if (alloworigin != "*")  /* restricted origin */
-            {
-                resourceURL = new URL(resourceLocation[index]);
-                frameURL = new URL(resourceReferer[index]);
-                
-                if (resourceURL.origin != frameURL.origin &&  /* cross-origin resource */
-                    (alloworigin == "" || alloworigin != frameURL.origin))  /* either no header or no origin match */
-                {
-                    loadFailure(index,"cors");
-                    return;
-                }
-            }
-            
+        case "image/svg+xml":  /* svg file or image file*/
         case "image/png":  /* image file */
         case "image/vnd.microsoft.icon":  /* icon file */
         case "audio/mpeg":  /* audio file */
         case "video/mp4":  /* video file */
         case "application/octet-stream":  /* data file */
             
-            if (mimetype != "") resourceMimeType[index] = mimetype;
-            
-            resourceContent[index] = content;
-            
-            break;
-            
-        case "application/javascript":  /* javascript file */
-            
-            if (mimetype != "application/javascript" && mimetype != "application/x-javascript" && mimetype != "application/ecmascript" &&
-                mimetype != "application/json" && mimetype != "text/javascript" && mimetype != "text/x-javascript" && mimetype != "text/json")  /* incorrect MIME type */
+            if (mimetype != "image/svg+xml")  /* not svg file */
             {
-                loadFailure(index,"mime");
-                return;
+                if (mimetype != "") resourceMimeType[index] = mimetype;
+                resourceCharSet[index] = "";
+                
+                resourceContent[index] = content;
+                
+                break;
             }
+            
+            /* svg file - fall through */
+            
+        case "text/javascript":  /* javascript file */
+            
+            if (mimetype != "image/svg+xml")  /* svg file */
+            {
+                /* See Mozilla source/dom/base/nsContentUtils.cpp for list of supported JavaScript MIME types */
+                
+                if (mimetype != "text/javascript" && mimetype != "text/ecmascript" &&
+                    mimetype != "application/javascript" && mimetype != "application/ecmascript" && mimetype != "application/x-javascript" && mimetype != "application/x-ecmascript" &&
+                    mimetype != "text/javascript1.0" && mimetype != "text/javascript1.1" && mimetype != "text/javascript1.2" && mimetype != "text/javascript1.3" &&
+                    mimetype != "text/javascript1.4" && mimetype != "text/javascript1.5" &&
+                    mimetype != "text/x-ecmascript"&& mimetype != "text/x-javascript")  /* incorrect MIME type */
+                {
+                    loadFailure(index,"mime");
+                    
+                    return;
+                }
+            }
+            
+            /* svg or javascript file - fall through */
             
         case "text/vtt":  /* subtitles file */
             
@@ -1382,6 +2166,7 @@ function loadSuccess(index,content,contenttype,alloworigin)
             if (mimetype != "text/css")  /* incorrect MIME type */
             {
                 loadFailure(index,"mime");
+                
                 return;
             }
             
@@ -1422,18 +2207,19 @@ function loadSuccess(index,content,contenttype,alloworigin)
             {
                 matches[1] = removeQuotes(matches[1]);
                 
-                if (!isSchemeDataOrMozExtension(matches[1]))  /* exclude existing data uri or moz-extension url */
+                if (replaceableResourceURL(matches[1]))
                 {
                     i = rememberURL(matches[1],baseuri,"text/css",resourceCharSet[index],false);
                     
-                    if (i >= 0)
+                    if (i >= 0)  /* new style sheet */
                     {
                         resourceCount++;
                         
-                        documentURL = new URL(document.baseURI);
-                        
-                        chrome.runtime.sendMessage({ type: "loadResource", index: i, location: resourceLocation[i], referer: resourceReferer[i],
-                                                     passive: resourcePassive[i], pagescheme: documentURL.protocol, useCORS: false });
+                        if (safeContentOrAllowedMixedContent(i))
+                        { 
+                            loadResource(i,resourceLocation[i],resourceReferrer[i],getReferrerPolicy());
+                        }
+                        else loadFailure(i,"mixed");
                     }
                 }
             }
@@ -1443,12 +2229,14 @@ function loadSuccess(index,content,contenttype,alloworigin)
     
     resourceStatus[index] = "success";
     
+    resourceReason[index] = reason;
+    
     if (--resourceCount <= 0)
     {
         timeFinish[passNumber+3] = performance.now();
         
         if (passNumber == 1) gatherOtherResources();
-        else if (passNumber == 2) loadInfoBar(); 
+        else if (passNumber == 2) checkResources(); 
     }
 }
 
@@ -1463,1842 +2251,39 @@ function loadFailure(index,reason)
         timeFinish[passNumber+3] = performance.now();
         
         if (passNumber == 1) gatherOtherResources();
-        else if (passNumber == 2) loadInfoBar();
+        else if (passNumber == 2) checkResources();
     }
 }
 
-/************************************************************************/
-
-/* After second pass - load local files */
-
-function loadInfoBar()
+function safeContentOrAllowedMixedContent(index)
 {
-    var xhr;
+    var documentURL,pagescheme,safeContent,mixedContent;
     
-    if (includeInfoBar)
-    {
-        xhr = new XMLHttpRequest();
-        xhr.open("GET",chrome.runtime.getURL("pageinfo-bar-compressed.html"),true);
-        xhr.onload = complete;
-        xhr.send();
-    }
-    else loadPageLoader();
-        
-    function complete()
-    {
-        if (xhr.status == 200)
-        {
-            pageInfoBarText = xhr.responseText;
-            
-            loadPageLoader();
-        }
-    }
-}
-
-function loadPageLoader()
-{
-    var xhr;
+    /* Load request must not be sent if http: resource in https: page or https: referrer */
+    /* unless passive mixed content and allowed by user option */
     
-    if (usePageLoader && !savedPage)
-    {
-        xhr = new XMLHttpRequest();
-        xhr.overrideMimeType("application/javascript");
-        xhr.open("GET",chrome.runtime.getURL("pageloader-compressed.js"),true);
-        xhr.onload = complete;
-        xhr.send();
-    }
-    else checkResources();
+    documentURL = new URL(document.baseURI);
     
-    function complete()
-    {
-        if (xhr.status == 200)
-        {
-            pageLoaderText = xhr.responseText;
-            
-            checkResources();
-        }
-    }
-}
-
-/************************************************************************/
-
-/* After second pass - check resources */
-
-function checkResources()
-{
-    var i,dataurisize,skipcount,failcount,iconlocation,count;
-    var skipinflist = new Array();
-    var skipurllist = new Array();
-    var failinflist = new Array();
-    var failurllist = new Array();
+    pagescheme = documentURL.protocol;
     
-    /* Check for large resource sizes and failed resource loads */
+    safeContent = (resourceLocation[index].substr(0,6) == "https:" || (resourceLocation[index].substr(0,5) == "http:" && resourceReferrer[index].substr(0,5) == "http:" && pagescheme == "http:"));
     
-    if (!savedPage)
-    {
-        dataurisize = 0;
-        skipcount = 0;
-        failcount = 0;
-        
-        iconlocation = resolveURL("/favicon.ico",document.baseURI);
-        
-        for (i = 0; i < resourceLocation.length; i++)
-        {
-            if (resourceCharSet[i] == "")  /* charset not defined - binary data */
-            {
-                count = usePageLoader ? 1 : resourceRemembered[i];
-                
-                if (resourceContent[i].length*count*(4/3) > maxResourceSize*1024*1024)  /* skip large and/or repeated resource */  /* base64 expands by 4/3 */
-                {
-                  skipcount++;
-                  skipinflist.push((resourceContent[i].length*count*(4/3)/(1024*1024)).toFixed(1) + " MB");
-                  try { skipurllist.push(decodeURIComponent(resourceLocation[i])); }
-                  catch (e) { skipurllist.push(resourceLocation[i]); }
-                }
-                else dataurisize += resourceContent[i].length*count*(4/3);  /* base64 expands by 4/3 */
-            }
-            
-            if (resourceStatus[i] == "failure")
-            {
-                if (!iconFound && resourceLocation[i] == iconlocation && resourceMimeType[i] == "image/vnd.microsoft.icon" && resourceReason[i] == "load:404")
-                {
-                    resourceLocation.splice(i,1);
-                    resourceReferer.splice(i,1);
-                    resourceMimeType.splice(i,1);
-                    resourceCharSet.splice(i,1);
-                    resourcePassive.splice(i,1);
-                    resourceContent.splice(i,1);
-                    resourceStatus.splice(i,1);
-                    resourceReason.splice(i,1);
-                    resourceRemembered.splice(i,1);
-                    resourceReplaced.splice(i,1);
-                    i--;
-                }
-                else
-                {
-                    failcount++;
-                    failinflist.push(resourceReason[i]);
-                    try { failurllist.push(decodeURIComponent(resourceLocation[i])); }
-                    catch (e) { failurllist.push(resourceLocation[i]); }
-                }
-            }
-        }
-        
-        if (dataurisize > maxTotalSize*1024*1024)
-        {
-            showMessage("Total size of resources is too large","Save",
-                        "Cannot save page because the total size of resources exceeds " + maxTotalSize + "MB.\n\n" +
-                        "It may be possible to save this page by trying these suggestions:\n\n" +
-                        "    •  Save Basic Items.\n" +
-                        "    •  Save Chosen Items with some items disabled.\n" +
-                        "    •  Enable the 'Use page loader to reduce saved file size' option.\n" +
-                        "    •  Reduce the 'Maximum size allowed for a resource' option value.",
-                        null,
-                        function savecancel()
-                        {
-                            chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
-                            
-                            if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
-                        });
-        }
-        else if (showWarning)
-        {
-            if (skipcount > 0)
-            {
-                showMessage("Some resources exceed maximum size","Save",
-                            skipcount + " of " + resourceLocation.length + " resources exceed maximum size allowed.\n\n" +
-                            "It may be possible to save these resources by trying these suggestions:\n\n" +
-                            "    •  Enable the 'Use page loader to reduce saved file size' option.\n" +
-                            "    •  Increase the 'Maximum size allowed for a resource' option value.",
-                            function savecontinue()
-                            {
-                                if (failcount > 0) someResourcesNotLoaded();
-                                else if (showURLList) showUnsavedResources();
-                                else enterComments();
-                            },
-                            function savecancel()
-                            {
-                                chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
-                                
-                                if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
-                            });
-            }
-            else if (failcount > 0) someResourcesNotLoaded();
-            else enterComments();
-        }
-        else if (showURLList)
-        {
-            if (skipcount > 0 || failcount > 0) showUnsavedResources();
-            else enterComments();
-        }
-        else enterComments();
-    }
-    else enterComments();
+    mixedContent = (resourceLocation[index].substr(0,5) == "http:" && (resourceReferrer[index].substr(0,6) == "https:" || pagescheme == "https:"));
     
-    function someResourcesNotLoaded()
-    {
-        showMessage("Some resources could not be loaded","Save",
-            failcount + " of " + resourceLocation.length + " resources could not be loaded.\n\n" +
-            "It may be possible to load these resources by trying these suggestions:\n\n" +
-            "    •  Scroll to the bottom of the page before saving.\n" +
-            "    •  Use normal browing instead of private browsing.\n" +
-            "    •  Enable the 'Allow passive mixed content' option.\n" +
-            "    •  Select one of the 'Send referer header with orign ...' options.\n" +
-            "    •  Increase the 'Maximum time for loading a resource' option value.",
-            function savecontinue()
-            {
-                if (showURLList) showUnsavedResources();
-                else enterComments();
-            },
-            function savecancel()
-            {
-                chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
-                
-                if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
-            });
-    }
+    if (safeContent || (mixedContent && resourcePassive[index] && allowPassive)) return true;
     
-    function showUnsavedResources()
-    {
-        var i,xhr,parser,unsaveddoc,container,div;
-        
-        /* Load unsaved resources panel */
-        
-        xhr = new XMLHttpRequest();
-        xhr.open("GET",chrome.runtime.getURL("unsaved-panel.html"),true);
-        xhr.onload = complete;
-        xhr.send();
-        
-        function complete()
-        {
-            if (xhr.status == 200)
-            {
-                /* Parse unsaved resources document */
-                
-                parser = new DOMParser();
-                unsaveddoc = parser.parseFromString(xhr.responseText,"text/html");
-                
-                /* Create container element */
-                
-                container = document.createElement("div");
-                container.setAttribute("id","savepage-unsaved-panel-container");
-                document.documentElement.appendChild(container);
-                
-                /* Append unsaved resources elements */
-                
-                container.appendChild(unsaveddoc.getElementById("savepage-unsaved-panel-style"));
-                container.appendChild(unsaveddoc.getElementById("savepage-unsaved-panel-overlay"));
-                
-                /* Add listeners for buttons */
-                
-                document.getElementById("savepage-unsaved-panel-continue").addEventListener("click",clickContinue,false);
-                document.getElementById("savepage-unsaved-panel-cancel").addEventListener("click",clickCancel,false);
-                
-                /* Populate skipped resources */
-                
-                if (skipurllist.length > 0)
-                {
-                    document.getElementById("savepage-unsaved-panel-header").textContent = "Resources that exceed maximum size";
-                    
-                    for (i = 0; i < skipurllist.length; i++)
-                    {
-                        div = document.createElement("div");
-                        div.textContent = (i+1);
-                        document.getElementById("savepage-unsaved-panel-nums").appendChild(div);
-                        
-                        div = document.createElement("div");
-                        div.textContent = skipinflist[i];
-                        document.getElementById("savepage-unsaved-panel-infs").appendChild(div);
-                        
-                        div = document.createElement("div");
-                        div.textContent = skipurllist[i];
-                        document.getElementById("savepage-unsaved-panel-urls").appendChild(div);
-                    }
-                }
-                else clickContinue();
-            }
-        }
-        
-        function clickContinue()
-        {
-            var i,div;
-            
-            /* Remove skipped resources */
-            
-            if (skipurllist.length > 0)
-            {
-                for (i = 0; i < skipurllist.length; i++)
-                {
-                    document.getElementById("savepage-unsaved-panel-nums").removeChild(document.getElementById("savepage-unsaved-panel-nums").children[0]);
-                    document.getElementById("savepage-unsaved-panel-infs").removeChild(document.getElementById("savepage-unsaved-panel-infs").children[0]);
-                    document.getElementById("savepage-unsaved-panel-urls").removeChild(document.getElementById("savepage-unsaved-panel-urls").children[0]);
-                }
-                
-                skipurllist.length = 0;
-            }
-            
-            /* Change text alignment of information column */
-            
-            document.getElementById("savepage-unsaved-panel-infs").style.setProperty("text-align","left","important");
-            
-            /* Populate failed resources */
-            
-            if (failurllist.length > 0)
-            {
-                document.getElementById("savepage-unsaved-panel-header").textContent = "Resources that could not be loaded";
-                
-                for (i = 0; i < failurllist.length; i++)
-                {
-                    div = document.createElement("div");
-                    div.textContent = (i+1);
-                    document.getElementById("savepage-unsaved-panel-nums").appendChild(div);
-                    
-                    div = document.createElement("div");
-                    div.textContent = failinflist[i];
-                    document.getElementById("savepage-unsaved-panel-infs").appendChild(div);
-                    
-                    div = document.createElement("div");
-                    div.textContent = failurllist[i];
-                    document.getElementById("savepage-unsaved-panel-urls").appendChild(div);
-                }
-                
-                failurllist.length = 0;
-            }
-            else
-            {
-                document.documentElement.removeChild(document.getElementById("savepage-unsaved-panel-container"));
-                
-                enterComments();
-            }
-        }
-        
-        function clickCancel()
-        {
-            document.documentElement.removeChild(document.getElementById("savepage-unsaved-panel-container"));
-            
-            chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
-            
-            if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
-        }
-    }
-}
-
-function showMessage(messagetitle,buttonsuffix,messagetext,continuefunction,cancelfunction)
-{
-    var xhr,parser,messagedoc,container;
-    
-    xhr = new XMLHttpRequest();
-    xhr.open("GET",chrome.runtime.getURL("message-panel.html"),true);
-    xhr.onload = complete;
-    xhr.send();
-    
-    function complete()
-    {
-        if (xhr.status == 200)
-        {
-            /* Parse alert document */
-            
-            parser = new DOMParser();
-            messagedoc = parser.parseFromString(xhr.responseText,"text/html");
-            
-            /* Create container element */
-            
-            container = document.createElement("div");
-            container.setAttribute("id","savepage-message-panel-container");
-            document.documentElement.appendChild(container);
-            
-            /* Append message elements */
-            
-            container.appendChild(messagedoc.getElementById("savepage-message-panel-style"));
-            container.appendChild(messagedoc.getElementById("savepage-message-panel-overlay"));
-            
-            /* Set title, button names and contents */
-            
-            document.getElementById("savepage-message-panel-header").textContent = messagetitle;
-            document.getElementById("savepage-message-panel-continue").textContent = "Continue " + buttonsuffix;
-            document.getElementById("savepage-message-panel-cancel").textContent = "Cancel " + buttonsuffix;
-            document.getElementById("savepage-message-panel-text").textContent = messagetext;
-            
-            /* Add listeners for buttons */
-            
-            document.getElementById("savepage-message-panel-cancel").addEventListener("click",clickCancel,false);
-            
-            if (continuefunction == null)
-            {
-                document.getElementById("savepage-message-panel-continue").style.setProperty("display","none","important");
-                document.getElementById("savepage-message-panel-cancel").style.setProperty("border","1px solid #0078D7","important");
-            }
-            else document.getElementById("savepage-message-panel-continue").addEventListener("click",clickContinue,false);
-        }
-    }
-    
-    function clickContinue()
-    {
-        document.documentElement.removeChild(document.getElementById("savepage-message-panel-container"));
-        
-        continuefunction();
-    }
-    
-    function clickCancel()            
-    {
-        document.documentElement.removeChild(document.getElementById("savepage-message-panel-container"));
-        
-        cancelfunction();
-    }
-}
-
-/************************************************************************/
-
-/* After second pass - prompt user to enter comments */
-
-function enterComments()
-{
-    var i,xhr,parser,commentsdoc,container,comments;
-    
-    /* Load comments panel */
-    
-    if (promptComments)
-    {
-        xhr = new XMLHttpRequest();
-        xhr.open("GET",chrome.runtime.getURL("comments-panel.html"),true);
-        xhr.onload = complete;
-        xhr.send();
-    }
-    else window.setTimeout(function() { generateHTML(); },10);  /* allow time for any open panel to close */
-    
-    function complete()
-    {
-        if (xhr.status == 200)
-        {
-            /* Parse comments document */
-            
-            parser = new DOMParser();
-            commentsdoc = parser.parseFromString(xhr.responseText,"text/html");
-            
-            /* Create container element */
-            
-            container = document.createElement("div");
-            container.setAttribute("id","savepage-comments-panel-container");
-            document.documentElement.appendChild(container);
-            
-            /* Append page info elements */
-            
-            container.appendChild(commentsdoc.getElementById("savepage-comments-panel-style"));
-            container.appendChild(commentsdoc.getElementById("savepage-comments-panel-overlay"));
-            
-            /* Add listeners for buttons */
-            
-            document.getElementById("savepage-comments-panel-continue").addEventListener("click",clickContinue,false);
-            document.getElementById("savepage-comments-panel-cancel").addEventListener("click",clickCancel,false);
-            
-            /* Populate comments contents */
-            
-            if (savedPage)
-            {
-                comments = document.querySelector("meta[name='savepage-comments']").content;  /* decodes HTML entities */
-                
-                document.getElementById("savepage-comments-panel-textarea").value = comments;
-            }
-            
-            /* Focus text area */
-            
-            document.getElementById("savepage-comments-panel-textarea").focus();
-        }
-    }
-    
-    function clickContinue()
-    {
-        var comments;
-        
-        comments = document.getElementById("savepage-comments-panel-textarea").value;
-        
-        comments = comments.replace(/&/g,"&amp;");
-        comments = comments.replace(/"/g,"&quot;");
-        comments = comments.replace(/\u000A/g,"&NewLine;");
-        
-        enteredComments = comments;
-        
-        document.documentElement.removeChild(document.getElementById("savepage-comments-panel-container"));
-        
-        window.setTimeout(function() { generateHTML(); },10);  /* allow time for enter comments panel to close */
-    }
-    
-    function clickCancel()
-    {
-        document.documentElement.removeChild(document.getElementById("savepage-comments-panel-container"));
-        
-        chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
-        
-        if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: false });
-    }
-}
-
-/************************************************************************/
-
-/* Third Pass - to generate HTML and save to file */
-
-function generateHTML()
-{
-    var i,j,totalscans,totalloads,maxstrsize,totalstrsize,mimetype,charset,htmlBlob,objectURL,filename,link;
-    
-    for (i = 0; i < crossFrameName.length; i++)
-    {
-        // console.log("Main  - Array - " + i + " - " + (crossFrameName[i] + "                         ").substr(0,25) + " - " +
-                    // (crossFrameURL[i] + "                                                            ").replace(/\:/g,"").substr(0,80));  /*???*/
-    }
-    
-    passNumber = 3;
-    
-    chrome.runtime.sendMessage({ type: "setSaveBadge", text: "SAVE", color: "#0000E0" });
-    
-    /* Generate HTML enhanced */
-    
-    timeStart[3] = performance.now();
-    
-    extractHTML(0,window,document.documentElement,false,false,0,0);
-    
-    timeFinish[3] = performance.now();
-    
-    /* Append metrics and resource summary */
-    
-    if (includeSummary)
-    {
-        totalscans = retainCrossFrames ? timeFinish[0]-timeStart[0] : 0;
-        totalscans += timeFinish[1]-timeStart[1]+timeFinish[2]-timeStart[2]+timeFinish[3]-timeStart[3];
-        totalloads = timeFinish[4]-timeStart[4]+timeFinish[5]-timeStart[5];
-        
-        htmlStrings[htmlStrings.length] = "\n\n<!--\n\n";
-        
-        if (retainCrossFrames) htmlStrings[htmlStrings.length] = "Pass 0 scan:  " + ("     " + Math.round(timeFinish[0]-timeStart[0])).substr(-6) + " ms\n";
-        htmlStrings[htmlStrings.length] = "Pass 1 scan:  " + ("     " + Math.round(timeFinish[1]-timeStart[1])).substr(-6) + " ms\n";
-        htmlStrings[htmlStrings.length] = "Pass 2 scan:  " + ("     " + Math.round(timeFinish[2]-timeStart[2])).substr(-6) + " ms\n";
-        htmlStrings[htmlStrings.length] = "Pass 3 scan:  " + ("     " + Math.round(timeFinish[3]-timeStart[3])).substr(-6) + " ms\n";
-        htmlStrings[htmlStrings.length] = "Total scans:  " + ("     " + Math.round(totalscans)).substr(-6) + " ms\n\n";
-        
-        htmlStrings[htmlStrings.length] = "Pass 1 loads: " + ("     " + Math.round(timeFinish[4]-timeStart[4])).substr(-6) + " ms\n";
-        htmlStrings[htmlStrings.length] = "Pass 2 loads: " + ("     " + Math.round(timeFinish[5]-timeStart[5])).substr(-6) + " ms\n";
-        htmlStrings[htmlStrings.length] = "Total loads:  " + ("     " + Math.round(totalloads)).substr(-6) + " ms\n\n";
-        
-        htmlStrings[htmlStrings.length] = "String count:     "  + ("    " + htmlStrings.length).substr(-5) + "\n";
-        
-        maxstrsize = totalstrsize = 0;
-        
-        for (i = 0; i < htmlStrings.length; i++)
-        {
-            totalstrsize += htmlStrings[i].length;
-            
-            if (htmlStrings[i].length > maxstrsize) maxstrsize = htmlStrings[i].length;
-        }
-        
-        htmlStrings[htmlStrings.length] = "Max size:      "  + ("       " + maxstrsize).substr(-8) + "\n";
-        htmlStrings[htmlStrings.length] = "Total size:   "  + ("        " + totalstrsize).substr(-9) + "\n\n";
-        
-        htmlStrings[htmlStrings.length] = "Resource count:    "  + ("   " + resourceLocation.length).substr(-4) + "\n\n";
-        
-        htmlStrings[htmlStrings.length] = "Refs  Reps  Status   Reason    MimeType    CharSet   ByteSize    URL\n\n";
-        
-        for (i = 0; i < resourceLocation.length; i++)
-        {
-            j = resourceMimeType[i].indexOf("/");
-            
-            mimetype = resourceMimeType[i].substr(0,j).substr(0,5);
-            mimetype += "/";
-            mimetype += resourceMimeType[i].substr(j+1,4);
-            
-            charset = (resourceCharSet[i] == "") ? "binary" : resourceCharSet[i];
-            
-            htmlStrings[htmlStrings.length] = ("    " + resourceRemembered[i]).substr(-4) + "  " +
-                                              ("    " + resourceReplaced[i]).substr(-4) + "  " +
-                                              resourceStatus[i] + "  " +
-                                              (resourceReason[i] + "        ").substr(0,8) + "  " +
-                                              (mimetype + "          ").substr(0,10) + "  " +
-                                              (charset + "        ").substr(0,8) + "  " +
-                                              ("        " + resourceContent[i].length).substr(-8) + "    " +
-                                              resourceLocation[i] + "\n";
-        }
-        
-        htmlStrings[htmlStrings.length] = "\n-->\n";
-    }
-    
-    /* Release resources */
-    
-    crossFrameName.length = 0;
-    crossFrameURL.length = 0;
-    crossFrameHTML.length = 0;
-    crossFrameFonts.length = 0;
-    
-    resourceLocation.length = 0;
-    resourceReferer.length = 0;
-    resourceMimeType.length = 0;
-    resourceCharSet.length = 0;
-    resourcePassive.length = 0;
-    resourceContent.length = 0;
-    resourceStatus.length = 0;
-    resourceReason.length = 0;
-    resourceRemembered.length = 0;
-    resourceReplaced.length = 0;
-    
-    pageInfoBarText = "";
-    pageLoaderText = "";
-    enteredComments = "";
-    
-    /* Code to test large saved file sizes */
-    
-    // var i,j,size,length;
-    
-    // size = 0;
-    
-    // length = htmlStrings.length;
-    
-    // for (i = 0; i < 1000; i++)
-    // {
-        // for (j = 0; j < length; j++)
-        // {
-            // size += htmlStrings[j].length;
-            
-            // if (i > 0) htmlStrings[htmlStrings.length] = htmlStrings[j];
-        // }
-    // }
-    
-    // alert(Math.trunc(size/(1024*1024))+"MB");
-    
-    /* Save to file using HTML5 download attribute */
-    
-    filename = getSavedFileName(document.baseURI,document.title,false);
-    
-    htmlBlob = new Blob(htmlStrings, { type : "text/html" });
-    
-    objectURL = window.URL.createObjectURL(htmlBlob);
-    
-    htmlStrings.length = 0;
-    
-    link = document.createElement("a");
-    link.id = "savepage-download-link";
-    link.download = filename;
-    link.href = objectURL;
-    
-    link.setAttribute("class","ajaxfree");  /* workaround to avoid 'Error Loading Page' message for spark.ru pages */
-    
-    document.body.appendChild(link);
-    
-    link.addEventListener("click",handleClick,true);
-    
-    link.click();  /* save page as .html file */
-    
-    link.removeEventListener("click",handleClick,true);
-    
-    document.body.removeChild(link);
-    
-    window.setTimeout(
-    function()
-    {
-        window.URL.revokeObjectURL(objectURL);
-        
-        chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
-        
-        if (externalSave) chrome.runtime.sendMessage({ type: "saveDone", success: true });
-    },100);
-    
-    function handleClick(event)
-    {
-        event.stopPropagation();
-    }
-}
-
-function extractHTML(depth,frame,element,crossorigin,nosource,parentpreserve,indent)
-{
-    var i,j,style,inline,preserve,property,displayed,startTag,endTag,textContent,baseuri,location,csstext,origurl,datauri,origstr;
-    var visible,width,height,currentsrc,htmltext,startindex,endindex,origdoc,parser,framedoc,doctype,target,text,date,state;
-    var retainElements = new Array("html","head","body","base","command","link","meta","noscript","script","style","template","title");
-    var voidElements = new Array("area","base","br","col","command","embed","frame","hr","img","input","keygen","link","menuitem","meta","param","source","track","wbr");
-    var htmlFrameStrings = new Array();
-    var matches = new Array();
-    
-    /* Determine if element is phrasing content - based on CSS display value */
-    
-    /* Determine if element format should be preserved - based on CSS white-space value */
-    /*   0 = collapse newlines, collapse spaces (normal or nowrap) */
-    /*   1 = preserve newlines, collapse spaces (pre-line)         */
-    /*   2 = preserve newlines, preserve spaces (pre or pre-wrap)  */
-    
-    if (formatHTML && depth == 0)
-    {
-        if ((style = frame.getComputedStyle(element)) == null)
-        {
-            inline = false;
-            preserve = 0;
-        }
-        else
-        {
-            property = style.getPropertyValue("display");
-            if (property.indexOf("inline") >= 0) inline = true;
-            else inline = false;
-            
-            property = style.getPropertyValue("white-space");
-            if (property == "pre" || property == "pre-nowrap") preserve = 2;
-            else if (property == "pre-line") preserve = 1;
-            else preserve = 0;
-        }
-    }
-    else preserve = 0;
-    
-    /* Purge elements that were deleted by Print Edit WE and are not currently displayed */
-    
-    if (purgeDeleted)
-    {
-        if (isFirefox && ffVersion <= 54 && crossorigin)
-        {
-            /* In cross-origin frames, the passed-in frame is actually the page window,      */
-            /* instead of the frame window, because the frame window is not accessible.      */
-            /* This means that the getComputedStyle() function from the page window is used. */
-            /* This should work, since all getComputedStyle() functions should be the same.  */
-            /* With Firefox 51-54, this causes large delays and may return incorrect styles. */
-            
-            /* The workaround is to not purge elements that are not currently displayed. */
-            
-            displayed = true;
-        }
-        else if ((style = frame.getComputedStyle(element)) == null) displayed = true;
-        else displayed = (style.getPropertyValue("display") != "none");
-    }
-    else displayed = true;
-    
-    /* Do not purge essential HTML elements */
-    /* Do not purge <svg> elements because child elements may be referenced by <use> elements in other <svg> elements */
-    
-    if (retainElements.indexOf(element.localName) < 0 && !(element instanceof SVGElement) && !displayed) return;
-    
-    /* Extract HTML from DOM and replace external resources with data URI's */
-    
-    startTag = "<" + element.localName;
-    for (i = 0; i < element.attributes.length; i++)
-    {
-        if (element.attributes[i].name != "zoompage-fontsize")
-        {
-            startTag += " " + element.attributes[i].name;
-            startTag += "=\"";
-            startTag += element.attributes[i].value.replace(/"/g,"&quot;");
-            startTag += "\"";
-        }
-    }
-    startTag += ">";
-    
-    textContent = "";
-    
-    if (voidElements.indexOf(element.localName) >= 0) endTag = "";
-    else endTag = "</" + element.localName + ">";
-    
-    /* External images referenced in any element's style attribute */
-    
-    if (element.hasAttribute("style"))
-    {
-        csstext = element.getAttribute("style");
-        
-        baseuri = element.ownerDocument.baseURI;
-        
-        csstext = replaceCSSURLs(csstext,baseuri,crossorigin);
-        
-        startTag = startTag.split("style=\"" + element.getAttribute("style").replace(/"/g,"&quot;") + "\"").join("style=\"" + csstext.replace(/"/g,"&quot;") + "\"");
-    }
-    
-    /* Internal script in <script> element */
-    /* External script in <script> element */
-    
-    if (element.localName == "script")
-    {
-        if (element.src == "")  /* internal script */
-        {
-            if ((menuAction == 1 && saveScripts) && !crossorigin && !nosource) textContent = element.textContent;
-        }
-        else /* element.src != "" */  /* external script */
-        {
-            if ((menuAction == 1 && saveScripts) && !crossorigin && !nosource)
-            {
-                if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-                {
-                    baseuri = element.ownerDocument.baseURI;
-                    
-                    origurl = element.getAttribute("src");
-                    
-                    datauri = replaceURL(origurl,baseuri,crossorigin);
-                    
-                    origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                    
-                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                }
-            }
-            else
-            {
-                origurl = element.getAttribute("src");
-                
-                origstr = " data-savepage-src=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"\"");
-            }
-        }
-    }
-    
-    /* External images or fonts referenced in <style> element */
-    
-    else if (element.localName == "style")
-    {
-        if (element.id == "zoompage-pageload-style" || element.id == "zoompage-zoomlevel-style" || element.id == "zoompage-fontsize-style")
-        {
-            startTag = "";
-            endTag = "";
-            textContent = "";
-        }
-        else
-        {
-            if (!element.disabled)
-            {
-                if (element.hasAttribute("data-styled-components") && element.textContent == "")
-                {
-                    /* Workaround for 'styled components' issue #1571 - for example reddit.com pages */
-                    
-                    csstext = "";
-                    
-                    for (i = 0; i < element.sheet.cssRules.length; i++)
-                        csstext += element.sheet.cssRules[i].cssText;
-                }
-                else csstext = element.textContent;
-                
-                baseuri = element.ownerDocument.baseURI;
-                
-                textContent = replaceCSSURLsInStyleSheet(csstext,baseuri,crossorigin);
-                
-                if (swapDevices) textContent = swapScreenAndPrintDevices(textContent);
-            }
-            else
-            {
-                startTag = startTag.replace(/<style/,"<style data-savepage-disabled=\"\"");
-                
-                textContent = "";
-            }
-        }
-    }
-    
-    /* External images or fonts referenced in <link> element */
-    /* External icon referenced in <link> element */
-    
-    else if (element.localName == "link")
-    {
-        if (element.rel.toLowerCase() == "stylesheet" && element.getAttribute("href") != "" && element.href != "")  /* href attribute and property may be different */
-        {
-            if (!element.disabled)
-            {
-                if (!isSchemeDataOrMozExtension(element.href))  /* exclude existing data uri or moz-extension url */
-                {
-                    baseuri = element.ownerDocument.baseURI;
-                    
-                    if (baseuri != null)
-                    {
-                        location = resolveURL(element.href,baseuri);
-                        
-                        if (location != null)
-                        {
-                            for (i = 0; i < resourceLocation.length; i++)
-                                if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
-                            
-                            if (i < resourceLocation.length)  /* style sheet found */
-                            {
-                                csstext = resourceContent[i];
-                                
-                                /* Converting <link> into <style> means that CSS rules are embedded in saved HTML file */
-                                /* Therefore need to escape any </style> end tags that may appear inside CSS strings */
-                                
-                                csstext = csstext.replace(/<\/style>/gi,"<\\/style>");
-                                
-                                baseuri = element.href;
-                                
-                                textContent = replaceCSSURLsInStyleSheet(csstext,baseuri,crossorigin);
-                                
-                                if (swapDevices) textContent = swapScreenAndPrintDevices(textContent);
-                                
-                                startTag = "<style data-savepage-href=\"" + element.getAttribute("href") + "\"";
-                                if (element.type != "") startTag += " type=\"" + element.type + "\"";
-                                if (element.media != "") startTag += " media=\"" + element.media + "\"";
-                                startTag += ">";
-                                endTag = "</style>";
-                                
-                                resourceReplaced[i]++;
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                origurl = element.getAttribute("href");
-                
-                origstr = " data-savepage-href=\"" + origurl + "\" data-savepage-disabled=\"\"";
-                
-                startTag = startTag.replace(/ href="[^"]*"/,origstr + " href=\"\"");
-            }
-        }
-        else if ((element.rel.toLowerCase() == "icon" || element.rel.toLowerCase() == "shortcut icon") && element.href != "")
-        {
-            if (!isSchemeDataOrMozExtension(element.href))  /* exclude existing data uri or moz-extension url */
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                origurl = element.getAttribute("href");
-                
-                datauri = replaceURL(origurl,baseuri,crossorigin);
-                
-                origstr = (datauri == origurl) ? "" : " data-savepage-href=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ href="[^"]*"/,origstr + " href=\"" + datauri + "\"");
-            }
-        }
-    }
-    
-    /* Remove existing base element */
-    
-    else if (element.localName == "base")
-    {
-        startTag = "";
-        endTag = "";
-    }
-    
-    /* Remove previous saved page information */
-    
-    else if (element.localName == "meta")
-    {
-        if (element.name.substr(0,8) == "savepage")
-        {
-            startTag = "";
-            endTag = "";
-        }
-    }
-    
-    /* External image referenced in <body> element */
-    
-    else if (element.localName == "body")
-    {
-        if (element.background != "")
-        {
-            if (!isSchemeDataOrMozExtension(element.background))  /* exclude existing data uri or moz-extension url */
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                origurl = element.getAttribute("background");
-                
-                datauri = replaceURL(origurl,baseuri,crossorigin);
-                
-                origstr = (datauri == origurl) ? "" : " data-savepage-background=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ background="[^"]*"/,origstr + " background=\"" + datauri + "\"");
-            }
-        }
-    }
-    
-    /* External image referenced in <img> element - can be inside <picture> element */
-    
-    else if (element.localName == "img")
-    {
-        /* Purge images that were hidden by Print Edit WE and are not currently visible */
-        
-        if (purgeHidden)
-        {
-            if (isFirefox && ffVersion <= 54 && crossorigin)
-            {
-                /* In cross-origin frames, the passed-in frame is actually the page window,      */
-                /* instead of the frame window, because the frame window is not accessible.      */
-                /* This means that the getComputedStyle() function from the page window is used. */
-                /* This should work, since all getComputedStyle() functions should be the same.  */
-                /* With Firefox 51-54, this causes large delays and may return incorrect styles. */
-                
-                /* The workaround is to not purge images that are not currently visible. */
-                
-                visible = true;
-            }
-            else if ((style = frame.getComputedStyle(element)) == null) visible = true;
-            else visible = (style.getPropertyValue("visibility") != "hidden" && style.getPropertyValue("opacity") != "0");
-        }
-        else visible = true;
-        
-        if (!visible)
-        {
-            width = style.getPropertyValue("width");
-            height = style.getPropertyValue("height");
-            
-            startTag = "<img style=\"display: inline-block; width: " + width + "; height: " + height + ";\">";
-        }
-        else
-        {
-            /* currentSrc is set from src or srcset attributes on this <img> element */
-            /* or from srcset attribute on <source> element inside <picture> element */
-            
-            /* Firefox - workaround because currentSrc may be null string in cross-origin frames */
-            
-            currentsrc = (element.currentSrc == "") ? element.src : element.currentSrc;
-            
-            if (currentsrc != "")
-            {
-                if (element.src == currentsrc)  /* currentSrc set from src attribute */
-                {
-                    if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-                    {
-                        baseuri = element.ownerDocument.baseURI;
-                        
-                        origurl = element.getAttribute("src");
-                        
-                        datauri = replaceURL(origurl,baseuri,crossorigin);
-                        
-                        origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                        
-                        startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                    }
-                }
-                else  /* currentSrc set from srcset attribute */
-                {
-                    if (!isSchemeDataOrMozExtension(currentsrc))  /* exclude existing data uri or moz-extension url */
-                    {
-                        baseuri = element.ownerDocument.baseURI;
-                        
-                        origurl = (element.src == "") ? "" : element.getAttribute("src");
-                        
-                        datauri = replaceURL(currentsrc,baseuri,crossorigin);
-                        
-                        origstr = " data-savepage-src=\"" + origurl + "\"" + " data-savepage-currentsrc=\"" + currentsrc + "\"";
-                        
-                        startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                    }
-                    else  /* existing data uri */
-                    {
-                        origurl = (element.src == "") ? "" : element.getAttribute("src");
-                        
-                        datauri = currentsrc;
-                        
-                        origstr = " data-savepage-src=\"" + origurl + "\"";
-                        
-                        startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                    }
-                }
-            }
-            
-            if (element.srcset != "")
-            {
-                origurl = element.getAttribute("srcset");
-                
-                origstr = " data-savepage-srcset=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ srcset="[^"]*"/,origstr + " srcset=\"\"");
-            }
-        }
-    }
-    
-    /* External image referenced in <input> element */
-    /* Reinstate checked state or text value of <input> element */
-    
-    else if (element.localName == "input")
-    {
-        if (element.type.toLowerCase() == "image" && element.src != "")
-        {
-            if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                origurl = element.getAttribute("src");
-                
-                datauri = replaceURL(origurl,baseuri,crossorigin);
-                
-                origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-            }
-        }
-        
-        if (element.type.toLowerCase() == "file" || element.type.toLowerCase() == "password")
-        {
-            /* maintain security */
-        }
-        else if (element.type.toLowerCase() == "checkbox" || element.type.toLowerCase() == "radio")
-        {
-            if (element.checked) startTag = startTag.replace(/ checked="[^"]*"/," checked=\"\"");
-            else startTag = startTag.replace(/ checked="[^"]*"/,"");
-        }
-        else
-        {
-            if (element.hasAttribute("value")) startTag = startTag.replace(/ value="[^"]*"/," value=\"" + element.value + "\"");
-            else startTag = startTag.replace(/<input/,"<input value=\"" + element.value + "\"");
-        }
-    }
-    
-    /* Reinstate text value of <textarea> element */
-    
-    else if (element.localName == "textarea")
-    {
-        textContent = element.value;
-    }
-    
-    /* Reinstate selected state of <option> element */
-    
-    else if (element.localName == "option")
-    {
-        if (element.selected) startTag = startTag.replace(/ selected="[^"]*"/," selected=\"\"");
-        else startTag = startTag.replace(/ selected="[^"]*"/,"");
-    }
-    
-    /* External audio referenced in <audio> element */
-    
-    else if (element.localName == "audio")
-    {
-        if (element.src != "")
-        {
-            if (element.src == element.currentSrc)
-            {
-                if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-                {
-                    baseuri = element.ownerDocument.baseURI;
-                    
-                    origurl = element.getAttribute("src");
-                    
-                    datauri = replaceURL(origurl,baseuri,crossorigin);
-                    
-                    origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                    
-                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                }
-            }
-            else if (removeUnsavedURLs)
-            {
-                origurl = element.getAttribute("src");
-                
-                origstr = " data-savepage-src=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"\"");
-            }
-        }
-    }
-    
-    /* External video referenced in <video> element */
-    
-    else if (element.localName == "video")
-    {
-        if (element.src != "")
-        {
-            if (element.src == element.currentSrc)
-            {
-                if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-                {
-                    baseuri = element.ownerDocument.baseURI;
-                    
-                    origurl = element.getAttribute("src");
-                    
-                    datauri = replaceURL(origurl,baseuri,crossorigin);
-                    
-                    origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                    
-                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                }
-            }
-            else if (removeUnsavedURLs)
-            {
-                origurl = element.getAttribute("src");
-                
-                origstr = " data-savepage-src=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"\"");
-            }
-        }
-        
-        if (element.poster != "")
-        {
-            if (!isSchemeDataOrMozExtension(element.poster))  /* exclude existing data uri or moz-extension url */
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                origurl = element.getAttribute("poster");
-                
-                datauri = replaceURL(origurl,baseuri,crossorigin);
-                
-                origstr = (datauri == origurl) ? "" : " data-savepage-poster=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ poster="[^"]*"/,origstr + " poster=\"" + datauri + "\"");
-            }
-        }
-    }
-    
-    /* External audio/video/image referenced in <source> element */
-    
-    else if (element.localName == "source")
-    {
-        if (element.parentElement.localName == "audio" || element.parentElement.localName == "video")
-        {
-            if (element.src != "")
-            {
-                if (element.src == element.parentElement.currentSrc)
-                {
-                    if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-                    {
-                        baseuri = element.ownerDocument.baseURI;
-                        
-                        origurl = element.getAttribute("src");
-                        
-                        datauri = replaceURL(origurl,baseuri,crossorigin);
-                        
-                        origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                        
-                        startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                    }
-                }
-                else if (removeUnsavedURLs)
-                {
-                    origurl = element.getAttribute("src");
-                    
-                    origstr = " data-savepage-src=\"" + origurl + "\"";
-                    
-                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"\"");
-                }
-            }
-        }
-        else if (element.parentElement.localName == "picture")
-        {
-            if (element.srcset != "")
-            {
-                if (removeUnsavedURLs)
-                {
-                    origurl = element.getAttribute("srcset");
-                    
-                    origstr = " data-savepage-srcset=\"" + origurl + "\"";
-                    
-                    startTag = startTag.replace(/ srcset="[^"]*"/,origstr + " srcset=\"\"");
-                }
-            }
-        }
-    }
-    
-    /* External subtitles referenced in <track> element */
-    
-    else if (element.localName == "track")
-    {
-        if (element.src != "")
-        {
-            if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                origurl = element.getAttribute("src");
-                
-                datauri = replaceURL(origurl,baseuri,crossorigin);
-                
-                origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-            }
-        }
-    }
-    
-    /* External data referenced in <object> element */
-    
-    else if (element.localName == "object")
-    {
-        if (element.data != "")
-        {
-            if (!isSchemeDataOrMozExtension(element.data))  /* exclude existing data uri or moz-extension url */
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                origurl = element.getAttribute("data");
-                
-                datauri = replaceURL(origurl,baseuri,crossorigin);
-                
-                origstr = (datauri == origurl) ? "" : " data-savepage-data=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ data="[^"]*"/,origstr + " data=\"" + datauri + "\"");
-            }
-        }
-    }
-    
-    /* External data referenced in <embed> element */
-    
-    else if (element.localName == "embed")
-    {
-        if (element.src != "")
-        {
-            if (!isSchemeDataOrMozExtension(element.src))  /* exclude existing data uri or moz-extension url */
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                origurl = element.getAttribute("src");
-                
-                datauri = replaceURL(origurl,baseuri,crossorigin);
-                
-                origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
-                
-                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-            }
-        }
-    }
-    
-    /* Handle nested frames and child elements & text nodes & comment nodes */
-    /* Generate HTML into array of strings */
-    
-    if (element.localName == "iframe" || element.localName == "frame")  /* frame elements */
-    {
-        datauri = null;
-        
-        if (depth < maxFrameDepth)
-        {
-            nosource = nosource || (element.src == "" && element.srcdoc == "");
-            
-            try
-            {
-                if (element.contentDocument.documentElement != null)  /* in case web page not fully loaded before extracting */
-                {
-                    startindex = htmlStrings.length;
-                    
-                    extractHTML(depth+1,element.contentWindow,element.contentDocument.documentElement,crossorigin,nosource,preserve,indent+2);
-                    
-                    endindex = htmlStrings.length;
-                    
-                    htmlFrameStrings = htmlStrings.splice(startindex,endindex-startindex);
-                    
-                    htmltext = htmlFrameStrings.join("");
-                    
-                    datauri = "data:text/html;charset=utf-8," + encodeURIComponent(htmltext);
-                    
-                    startTag = startTag.replace(/(<iframe|<frame)/,"$1 data-savepage-sameorigin=\"\"");
-                    
-                    if (element.src != "")
-                    {
-                        origurl = element.getAttribute("src");
-                        
-                        origstr = " data-savepage-src=\"" + origurl + "\"";
-                        
-                        startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                    }
-                    else startTag = startTag.replace(/(<iframe|<frame)/,"$1 src=\"" + datauri + "\"");
-                    
-                    if (element.hasAttribute("srcdoc"))
-                    {
-                        origdoc = element.getAttribute("srcdoc");
-                        
-                        origstr = " data-savepage-srcdoc=\"" + origdoc + "\"";
-                        
-                        startTag = startTag.replace(/ srcdoc="[^"]*"/,origstr);
-                    }
-                }
-            }
-            catch (e)  /* attempting cross-domain web page access */
-            {
-                if (retainCrossFrames)
-                {
-                    for (i = 0; i < crossFrameName.length; i++)
-                    {
-                        if (crossFrameName[i] == element.name) break;
-                    }
-                    
-                    if (i != crossFrameName.length)
-                    {
-                        parser = new DOMParser();
-                        framedoc = parser.parseFromString(crossFrameHTML[i],"text/html");
-                        
-                        startindex = htmlStrings.length;
-                        
-                        extractHTML(depth+1,window,framedoc.documentElement,true,nosource,preserve,indent+2);
-                        
-                        endindex = htmlStrings.length;
-                        
-                        htmlFrameStrings = htmlStrings.splice(startindex,endindex-startindex);
-                        
-                        htmltext = htmlFrameStrings.join("");
-                        
-                        datauri = "data:text/html;charset=utf-8," + encodeURIComponent(htmltext);
-                        
-                        startTag = startTag.replace(/(<iframe|<frame)/,"$1 data-savepage-crossorigin=\"\"");
-                        
-                        if (element.src != "")
-                        {
-                            origurl = element.getAttribute("src");
-                            
-                            origstr = " data-savepage-src=\"" + origurl + "\"";
-                            
-                            startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
-                        }
-                        else startTag = startTag.replace(/(<iframe|<frame)/,"$1 src=\"" + datauri + "\"");
-                        
-                        if (element.hasAttribute("srcdoc"))
-                        {
-                            origdoc = element.getAttribute("srcdoc");
-                            
-                            origstr = " data-savepage-srcdoc=\"" + origdoc + "\"";
-                            
-                            startTag = startTag.replace(/ srcdoc="[^"]*"/,origstr);
-                        }
-                    }
-                }
-            }
-        }
-        
-        if (element.src != "")
-        {
-            if (datauri == null)
-            {
-                if (removeUnsavedURLs)
-                {
-                    origurl = element.getAttribute("src");
-                    
-                    origstr = " data-savepage-src=\"" + origurl + "\"";
-                    
-                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"\"");
-                }
-            }
-        }
-        
-        if (formatHTML && depth == 0 && !inline && parentpreserve == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
-        htmlStrings[htmlStrings.length] = startTag;
-        
-        if (element.localName == "iframe")
-        {
-            if (formatHTML && depth == 0 && !inline && parentpreserve == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
-            htmlStrings[htmlStrings.length] = endTag;
-        }
-    }
-    else
-    {
-        if (element.localName == "html")
-        {
-            /* Add !DOCTYPE declaration */
-            
-            doctype = element.ownerDocument.doctype;
-            
-            if (doctype != null)
-            {
-                htmltext = '<!DOCTYPE ' + doctype.name + (doctype.publicId ? ' PUBLIC "' + doctype.publicId + '"' : '') +
-                           ((doctype.systemId && !doctype.publicId) ? ' SYSTEM' : '') + (doctype.systemId ? ' "' + doctype.systemId + '"' : '') + '>';
-                
-                htmlStrings[htmlStrings.length] = htmltext;
-            }
-        }
-        
-        if (startTag != "")
-        {
-            if (formatHTML && depth == 0 && !inline && parentpreserve == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
-            htmlStrings[htmlStrings.length] = startTag;
-        }
-        
-        if (element.localName == "head")
-        {
-            /* Add <base> element to make relative URL's work in saved file */
-            
-            if (element.ownerDocument.head.querySelector("base") != null) target = element.ownerDocument.head.querySelector("base").target;
-            else target = "";
-            
-            htmltext = "\n    <base href=\"" + element.ownerDocument.baseURI + "\"";
-            if (target != "") htmltext += " target=\"" + target + "\"";
-            htmltext += ">";
-            
-            htmlStrings[htmlStrings.length] = htmltext;
-        }
-        
-        if (element.localName == "style" ||  /* style element */
-            (element.localName == "script" && element.src == "") ||  /* <script> element */
-            (element.localName == "link" && element.rel.toLowerCase() == "stylesheet" &&
-             element.getAttribute("href") != "" && element.href != ""))  /* <link rel="stylesheet" href="..."> element */
-        {
-            if (formatHTML && depth == 0)
-            {
-                if (textContent.substr(-1) == "\n") textContent = textContent.substr(0,textContent.length-1);
-                textContent = textContent.replace(/\n/g,newlineIndent(indent+2));
-                textContent += newlineIndent(indent);
-            }
-            
-            htmlStrings[htmlStrings.length] = textContent;
-        }
-        else if (element.localName == "textarea")  /* <textarea> element */
-        {
-            textContent = textContent.replace(/&/g,"&amp;");
-            textContent = textContent.replace(/</g,"&lt;");
-            textContent = textContent.replace(/>/g,"&gt;");
-            
-            htmlStrings[htmlStrings.length] = textContent;
-        }
-        else if (voidElements.indexOf(element.localName) >= 0) ;  /* void element */
-        else
-        {
-            for (i = 0; i < element.childNodes.length; i++)
-            {
-                if (element.childNodes[i] != null)  /* in case web page not fully loaded before extracting */
-                {
-                    if (element.childNodes[i].nodeType == 1)  /* element node */
-                    {
-                        extractHTML(depth,frame,element.childNodes[i],crossorigin,nosource,preserve,indent+2);
-                    }
-                    else if (element.childNodes[i].nodeType == 3)  /* text node */
-                    {
-                        text = element.childNodes[i].textContent;
-                        
-                        if (element.localName != "noscript")
-                        {
-                            text = text.replace(/&/g,"&amp;");
-                            text = text.replace(/</g,"&lt;");
-                            text = text.replace(/>/g,"&gt;");
-                        }
-                        
-                        if (formatHTML && depth == 0)
-                        {
-                            /* HTML whitespace == HTML space characters == spaces + newlines */
-                            /* HTML spaces: space (U+0020), tab (U+0009), form feed (U+000C) */
-                            /* HTML newlines: line feed (U+000A) or carriage return (U+000D) */
-                            
-                            if (preserve == 0) text = text.replace(/[\u0020\u0009\u000C\u000A\u000D]+/g," ");
-                            else if (preserve == 1) text = text.replace(/[\u0020\u0009\u000C]+/g," ");
-                        }
-                        
-                        htmlStrings[htmlStrings.length] = text;
-                    }
-                    else if (element.childNodes[i].nodeType == 8)  /* comment node */
-                    {
-                        text = element.childNodes[i].textContent;
-                        
-                        if (formatHTML && depth == 0 && !inline && preserve == 0)
-                        {
-                            text = text.replace(/\n/g,newlineIndent(indent+2));
-                            
-                            htmlStrings[htmlStrings.length] = newlineIndent(indent+2);
-                        }
-                        
-                        htmlStrings[htmlStrings.length] = "<!--" + text + "-->";
-                    }
-                }
-            }
-        }
-        
-        if (element.localName == "head" && depth == 0)
-        {
-            /* Add favicon if missing */
-            
-            if (!iconFound)
-            {
-                baseuri = element.ownerDocument.baseURI;
-                
-                datauri = replaceURL("/favicon.ico",baseuri,crossorigin);
-                
-                htmltext = "\n    <link rel=\"icon\" href=\"" + datauri + "\">";
-                
-                htmlStrings[htmlStrings.length] = htmltext;
-            }
-            
-            /* Add page loader script */
-            
-            if (usePageLoader && !savedPage)
-            {
-                pageLoaderText = pageLoaderText.substr(0,pageLoaderText.length-1);  /* remove final '}' */
-                
-                htmltext = "\n    <script id=\"savepage-pageloader\" type=\"application/javascript\">";
-                htmltext += "\n      savepage_PageLoader(" + maxFrameDepth + ");";
-                htmltext += "\n      " + pageLoaderText;
-                for (i = 0; i < resourceLocation.length; i++) 
-                {
-                    if (resourceStatus[i] == "success" && resourceCharSet[i] == "" && resourceRemembered[i] > 1)  /* charset not defined - binary data */
-                    {
-                        htmltext += "\n        resourceMimeType[" + i + "] = \"" + resourceMimeType[i] + "\";";
-                        htmltext += " resourceBase64Data[" + i + "] = \"" + btoa(resourceContent[i]) + "\";";
-                    }
-                }
-                htmltext += "\n      }";  /* add final '}' */
-                htmltext += "\n    </script>";
-                
-                htmlStrings[htmlStrings.length] = htmltext;
-            }
-            
-            /* Add page info bar html, css and script */
-            
-            if (includeInfoBar)
-            {
-                date = new Date();
-                
-                pageInfoBarText = pageInfoBarText.replace(/%URL%/,document.URL);
-                pageInfoBarText = pageInfoBarText.replace(/%DECODED-URL%/,decodeURIComponent(document.URL));
-                pageInfoBarText = pageInfoBarText.replace(/%DATE%/,date.toDateString().substr(8,2) + " " + date.toDateString().substr(4,3) + " " + date.toDateString().substr(11,4));
-                pageInfoBarText = pageInfoBarText.replace(/%TIME%/,date.toTimeString().substr(0,8));
-                
-                htmltext = "\n    <script id=\"savepage-pageinfo-bar-insert\" type=\"application/javascript\">";
-                htmltext += "\n      window.addEventListener('load',function(event) {";
-                htmltext += "\n        var pageinfobartext = '" + pageInfoBarText + "';";
-                htmltext += "\n        var parser = new DOMParser();";
-                htmltext += "\n        var pageinfodoc = parser.parseFromString(pageinfobartext,'text/html');";
-                htmltext += "\n        var container = document.createElement('div');";
-                htmltext += "\n        container.setAttribute('id','savepage-pageinfo-bar-container');";
-                htmltext += "\n        document.documentElement.appendChild(container);";
-                htmltext += "\n        container.appendChild(pageinfodoc.getElementById('savepage-pageinfo-bar-style'));";
-                htmltext += "\n        container.appendChild(pageinfodoc.getElementById('savepage-pageinfo-bar-content'));";
-                htmltext += "\n        document.getElementById('savepage-pageinfo-bar-button').addEventListener('click',function(event) {";
-                htmltext += "\n          var container = document.getElementById('savepage-pageinfo-bar-container');";
-                htmltext += "\n          document.documentElement.removeChild(container);";
-                htmltext += "\n        },false);";
-                htmltext += "\n        var script = document.getElementById('savepage-pageinfo-bar-insert');";
-                htmltext += "\n        document.head.removeChild(script);";
-                htmltext += "\n      },false);";
-                htmltext += "\n    </script>";
-                
-                htmlStrings[htmlStrings.length] = htmltext;
-            }
-            
-            /* Add saved page information */
-            
-            date = new Date();
-            
-            if (menuAction == 0)
-            {
-                state = "Basic Items;";
-            }
-            else if (menuAction == 1)
-            {
-                state = "Chosen Items;";
-                if (saveHTMLImagesAll) state += " HTML image files (all);";
-                if (saveHTMLAudioVideo) state += " HTML audio & video files;";
-                if (saveHTMLObjectEmbed) state += " HTML object & embed files;";
-                if (saveCSSImagesAll) state += " CSS image files (all);";
-                if (saveCSSFontsWoff) state += " CSS font files (woff for any browser);";
-                if (saveScripts) state += " Scripts (in same-origin frames);";
-            }
-            else if (menuAction == 2)
-            {
-                state = "Standard Items;";
-            }
-            
-            if (usePageLoader && !savedPage) state += " Used page loader;";
-            if (retainCrossFrames) state += " Retained cross-origin frames;";
-            if (removeUnsavedURLs) state += " Removed unsaved URLs;";
-            if (allowPassive) state += " Allowed passive mixed content;";
-            if (refererHeader == 1) state += " Sent referer headers with origin only;";
-            else if (refererHeader == 2) state += " Sent referer headers with origin and path;";
-            state += " Max frame depth = " + maxFrameDepth + ";";
-            state += " Max resource size = " + maxResourceSize + "MB;";
-            state += " Max resource time = " + maxResourceTime + "s;";
-            
-            htmltext = "\n    <meta name=\"savepage-url\" content=\"" + decodeURIComponent(document.URL) + "\">";
-            htmltext += "\n    <meta name=\"savepage-title\" content=\"" + document.title + "\">";
-            htmltext += "\n    <meta name=\"savepage-date\" content=\"" + date.toString() + "\">";
-            htmltext += "\n    <meta name=\"savepage-state\" content=\"" + state + "\">";
-            htmltext += "\n    <meta name=\"savepage-version\" content=\"" + chrome.runtime.getManifest().version + "\">";
-            htmltext += "\n    <meta name=\"savepage-comments\" content=\"" + enteredComments + "\">";
-            
-            htmlStrings[htmlStrings.length] = htmltext;
-        }
-        
-        if (endTag != "")
-        {
-            if (formatHTML && depth == 0 && !inline && parentpreserve == 0 && element.children.length > 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
-            htmlStrings[htmlStrings.length] = endTag;
-        }
-    }
-}
-
-function replaceCSSURLsInStyleSheet(csstext,baseuri,crossorigin)
-{
-    var regex;
-    var matches = new Array();
-    
-    /* @import url() excluding existing data uri or */
-    /* font or image url() excluding existing data uri or */
-    /* avoid matches inside double-quote strings */
-    /* avoid matches inside single-quote strings */
-    /* avoid matches inside comments */
-    
-    regex = new RegExp(/(?:( ?)@import\s*(?:url\(\s*)?((?:"[^"]+")|(?:'[^']+')|(?:[^\s);]+))(?:\s*\))?\s*;)|/.source +  /* p1 & p2 */
-                       /(?:( ?)url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\))|/.source +  /* p3 & p4 */
-                       /(?:"(?:\\"|[^"])*")|/.source +
-                       /(?:'(?:\\'|[^'])*')|/.source +
-                       /(?:\/\*(?:\*[^\/]|[^\*])*?\*\/)/.source,
-                       "gi");
-    
-    csstext = csstext.replace(regex,_replaceCSSURLOrImportStyleSheet);
-    
-    return csstext;
-    
-    function _replaceCSSURLOrImportStyleSheet(match,p1,p2,p3,p4,offset,string)
-    {
-        var i,location,csstext,datauri,origstr;
-        
-        if (match.trim().substr(0,7).toLowerCase() == "@import")  /* @import url() */
-        {
-            p2 = removeQuotes(p2);
-            
-            if (!isSchemeDataOrMozExtension(p2))  /* exclude existing data uri or moz-extension url */
-            {
-                if (baseuri != null)
-                {
-                    location = resolveURL(p2,baseuri);
-                    
-                    if (location != null)
-                    {
-                        for (i = 0; i < resourceLocation.length; i++)
-                            if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
-                        
-                        if (i < resourceLocation.length)  /* style sheet found */
-                        {
-                            csstext = replaceCSSURLsInStyleSheet(resourceContent[i],resourceLocation[i],crossorigin);
-                            
-                            return p1 + "/*savepage-import-url=" + p2 + "*/" + p1 + csstext;
-                        }
-                    }
-                }
-                
-                if (removeUnsavedURLs) return p1 + "/*savepage-import-url=" + p2 + "*/" + p1;
-                else return match;  /* original @import rule */
-            }
-        }
-        else if (match.trim().substr(0,4).toLowerCase() == "url(")  /* font or image url() */
-        {
-            p4 = removeQuotes(p4);
-            
-            if (!isSchemeDataOrMozExtension(p4))  /* exclude existing data uri or moz-extension url */
-            {
-                datauri = replaceURL(p4,baseuri,crossorigin);
-                
-                origstr = (datauri == p4) ? p3 : p3 + "/*savepage-url=" + p4 + "*/" + p3;
-                
-                return origstr + "url(" + datauri + ")";
-            }
-            else return match;  /* original data uri */ 
-        }
-        else if (match.substr(0,1) == "\"") return match;  /* double-quote string */
-        else if (match.substr(0,1) == "'") return match;  /* single-quote string */
-        else if (match.substr(0,2) == "/*") return match;  /* comment */
-    }
-}
-
-function replaceCSSURLs(csstext,baseuri,crossorigin)
-{
-    var regex;
-    
-    regex = /( ?)url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\)/gi;  /* image url() */
-        
-    csstext = csstext.replace(regex,_replaceCSSURL);
-    
-    return csstext;
-    
-    function _replaceCSSURL(match,p1,p2,offset,string)
-    {
-        var datauri,origstr;
-        
-        p2 = removeQuotes(p2);
-        
-        if (!isSchemeDataOrMozExtension(p2))  /* exclude existing data uri or moz-extension url */
-        {
-            datauri = replaceURL(p2,baseuri,crossorigin);
-            
-            origstr = (datauri == p2) ? p1 : p1 + "/*savepage-url=" + p2 + "*/" + p1;
-            
-            return origstr + "url(" + datauri + ")";
-        }
-        else return match;  /* original data uri */ 
-    }
-}
-
-function replaceURL(url,baseuri,crossorigin)
-{
-    var i,location,count;
-    
-    if (savedPage) return url;  /* ignore new resources when re-saving */
-    
-    if (baseuri != null)
-    {
-        location = resolveURL(url,baseuri);
-        
-        if (location != null)
-        {
-            for (i = 0; i < resourceLocation.length; i++)
-                if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
-            
-            if (i < resourceLocation.length)
-            {
-                if (resourceCharSet[i] == "")  /* charset not defined - binary data */
-                {
-                    count = usePageLoader ? 1 : resourceRemembered[i];
-                    
-                    if (resourceContent[i].length*count*(4/3) > maxResourceSize*1024*1024)  /* skip large and/or repeated resource */  /* base64 expands by 4/3 */
-                    {
-                        if (removeUnsavedURLs) return "";  /* null string */
-                        else return url;  /* original url */
-                    }
-                    
-                    resourceReplaced[i]++;
-                    
-                    if (usePageLoader && !crossorigin && resourceRemembered[i] > 1)
-                    {
-                        return "data:" + resourceMimeType[i] + ";resource=" + i + ";base64,";  /* resource marker to be replaced by page loader */
-                    }
-                    else
-                    {
-                        return "data:" + resourceMimeType[i] + ";base64," + btoa(resourceContent[i]);  /* binary data encoded as Base64 ASCII string */
-                    }
-                }
-                else  /* charset defined - character data */
-                {
-                    resourceReplaced[i]++;
-                    
-                    return "data:" + resourceMimeType[i] + ";charset=utf-8," + encodeURIComponent(resourceContent[i]);  /* characters encoded as UTF-8 %escaped string */
-                }
-            }
-        }
-    }
-    
-    if (removeUnsavedURLs) return "";  /* null string */
-    else return url;  /* original url */
-}
-
-function swapScreenAndPrintDevices(csstext)
-{
-    var regex;
-    
-    regex = /@media[^{]*{/gi;  /* @media rule */
-        
-    csstext = csstext.replace(regex,_replaceDevice);
-    
-    return csstext;
-    
-    function _replaceDevice(match,offset,string)
-    {
-        match = match.replace(/screen/gi,"######");
-        match = match.replace(/print/gi,"screen");
-        match = match.replace(/######/gi,"print");
-        
-        return match;
-    }
-}
-
-/************************************************************************/
-
-/* Save utility functions */
-
-function resolveURL(url,baseuri)
-{
-    var resolvedURL;
-    
-    try
-    {
-        resolvedURL = new URL(url,baseuri);
-    }
-    catch (e)
-    {
-        return null;  /* baseuri invalid or null */
-    }
-    
-    return resolvedURL.href;
-}
-
-function removeQuotes(url)
-{
-    if (url.substr(0,1) == "\"" || url.substr(0,1) == "'") url = url.substr(1);
-    
-    if (url.substr(-1) == "\"" || url.substr(-1) == "'") url = url.substr(0,url.length-1);
-    
-    return url;
-}
-
-function isSchemeDataOrMozExtension(url)
-{
-    /* Exclude existing data uri or moz-extension url */
-    
-    if (url.substr(0,5).toLowerCase() == "data:" || url.substr(0,14).toLowerCase() == "moz-extension:") return true;
-
     return false;
+}
+
+function getReferrerPolicy()
+{
+    var  incognito;
+    
+    incognito = chrome.extension.inIncognitoContext;
+    
+    if (crossOrigin == 0 || incognito) return "strict-origin-when-cross-origin";
+    
+    return "no-referrer-when-downgrade";
 }
 
 function convertUTF8ToUTF16(utf8str)
@@ -3352,6 +2337,2691 @@ function convertUTF8ToUTF16(utf8str)
     return utf16str;
 }
 
+/************************************************************************/
+
+/* After second pass - check resources */
+
+function checkResources()
+{
+    var i,dataurisize,skipcount,failcount,count;
+    var skipinflist = [];
+    var skipurllist = [];
+    var failinflist = [];
+    var failurllist = [];
+    
+    /* Check for large resource sizes and failed resource loads */
+    
+    if (pageType == 0)  /* not saved page */
+    {
+        dataurisize = 0;
+        skipcount = 0;
+        failcount = 0;
+        
+        for (i = 0; i < resourceLocation.length; i++)
+        {
+            if (resourceCharSet[i] == "")  /* charset not defined - binary data */
+            {
+                count = mergeCSSImages ? resourceRemembered[i]-resourceCSSRemembered[i]+Object.keys(resourceCSSFrameKeys[i]).length : resourceRemembered[i];
+                
+                if (resourceContent[i].length*count > maxResourceSize*1024*1024)  /* skip large and/or repeated resource */
+                {
+                    skipcount++;
+                    skipinflist.push((resourceContent[i].length*count/(1024*1024)).toFixed(1) + " MB");
+                    try { skipurllist.push(decodeURIComponent(resourceLocation[i])); }
+                    catch (e) { skipurllist.push(resourceLocation[i]); }
+                }
+                else dataurisize += resourceContent[i].length*count*(4/3);  /* base64 expands by 4/3 */
+            }
+            
+            if (resourceStatus[i] == "failure")
+            {
+                if (rootIconLocation != "" && resourceLocation[i] == rootIconLocation && resourceReason[i] == "load:404")
+                {
+                    rootIconLocation = "";
+                    
+                    if (resourceRemembered[i] == 1)
+                    {
+                        resourceLocation.splice(i,1);
+                        resourceReferrer.splice(i,1);
+                        resourceMimeType.splice(i,1);
+                        resourceCharSet.splice(i,1);
+                        resourcePassive.splice(i,1);
+                        resourceContent.splice(i,1);
+                        resourceStatus.splice(i,1);
+                        resourceReason.splice(i,1);
+                        resourceRemembered.splice(i,1);
+                        resourceReplaced.splice(i,1);
+                        resourceCSSRemembered.splice(i,1);
+                        resourceCSSFrameKeys.splice(i,1);
+                        i--;
+                    }
+                    else resourceRemembered[i]--;
+                }
+                else
+                {
+                    failcount++;
+                    failinflist.push(resourceReason[i]);
+                    try { failurllist.push(decodeURIComponent(resourceLocation[i])); }
+                    catch (e) { failurllist.push(resourceLocation[i]); }
+                }
+            }
+        }
+        
+        if (dataurisize > maxTotalSize*1024*1024)
+        {
+            showMessage("Total size of resources is too large","Save",
+                        "Cannot save page because the total size of resources exceeds " + maxTotalSize + "MB.\n\n" +
+                        "It may be possible to save this page by trying these suggestions:\n\n" +
+                        "    •  Save Basic Items.\n" +
+                        "    •  Save Custom Items with some items disabled.\n" +
+                        "    •  Reduce the 'Maximum size allowed for a resource' option value.",
+                        null,
+                        function savecancel()
+                        {
+                            if (loadLazyContent != toggleLazy && lazyLoadType == 1) undoShrinkPage();
+                            
+                            saveState = -1;
+                            
+                            chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+                        });
+        }
+        else if (showWarning && !(skipWarningsComments && multipleSaves))
+        {
+            if (skipcount > 0)
+            {
+                showMessage("Some resources exceed maximum size","Save",
+                            skipcount + " of " + resourceLocation.length + " resources exceed maximum size allowed.\n\n" +
+                            "It may be possible to save these resources by trying these suggestions:\n\n" +
+                            "    •  Increase the 'Maximum size allowed for a resource' option value.",
+                            function savecontinue()
+                            {
+                                if (failcount > 0) someResourcesNotLoaded();
+                                else if (showResources) showUnsavedResources();
+                                else enterComments();
+                            },
+                            function savecancel()
+                            {
+                                if (loadLazyContent != toggleLazy && lazyLoadType == 1) undoShrinkPage();
+                                
+                                saveState = -1;
+                                
+                                chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+                            });
+            }
+            else if (failcount > 0) someResourcesNotLoaded();
+            else enterComments();
+        }
+        else if (showResources && !(skipWarningsComments && multipleSaves))
+        {
+            if (skipcount > 0 || failcount > 0) showUnsavedResources();
+            else enterComments();
+        }
+        else enterComments();
+    }
+    else enterComments();
+    
+    function someResourcesNotLoaded()
+    {
+        showMessage("Some resources could not be loaded","Save",
+            failcount + " of " + resourceLocation.length + " resources could not be loaded.\n\n" +
+            "It may be possible to load these resources by trying these suggestions:\n\n" +
+            "    •  Scroll to the bottom of the page before saving.\n" +
+            "    •  Use normal browsing instead of private browsing.\n" +
+            "    •  Enable the 'Allow passive mixed content' option.\n" +
+            "    •  Select the 'Send referrer headers with origin and path' option.\n" +
+            "    •  Increase the 'Maximum time for loading a resource' option value.",
+            function savecontinue()
+            {
+                if (showResources) showUnsavedResources();
+                else enterComments();
+            },
+            function savecancel()
+            {
+                if (loadLazyContent != toggleLazy && lazyLoadType == 1) undoShrinkPage();
+                
+                saveState = -1;
+                
+                chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+            });
+    }
+    
+    function showUnsavedResources()
+    {
+        var i,parser,unsaveddoc,container,div;
+        
+        /* Parse unsaved resources document */
+        
+        parser = new DOMParser();
+        unsaveddoc = parser.parseFromString(unsavedPanel,"text/html");
+        
+        /* Create container element */
+        
+        container = document.createElement("div");
+        container.setAttribute("id","savepage-unsaved-panel-container");
+        document.documentElement.appendChild(container);
+        
+        /* Append unsaved resources elements */
+        
+        container.appendChild(unsaveddoc.getElementById("savepage-unsaved-panel-overlay"));
+        
+        /* Add listeners for buttons */
+        
+        document.getElementById("savepage-unsaved-panel-continue").addEventListener("click",clickContinueOne,false);
+        document.getElementById("savepage-unsaved-panel-cancel").addEventListener("click",clickCancel,false);
+        
+        /* Focus continue button */
+        
+        document.getElementById("savepage-unsaved-panel-continue").focus();
+        
+        /* Populate skipped resources */
+        
+        if (skipurllist.length > 0)
+        {
+            document.getElementById("savepage-unsaved-panel-header").textContent = "Resources that exceed maximum size";
+            
+            for (i = 0; i < skipurllist.length; i++)
+            {
+                div = document.createElement("div");
+                div.textContent = (i+1);
+                document.getElementById("savepage-unsaved-panel-nums").appendChild(div);
+                
+                div = document.createElement("div");
+                div.textContent = skipinflist[i];
+                document.getElementById("savepage-unsaved-panel-infs").appendChild(div);
+                
+                div = document.createElement("div");
+                div.textContent = skipurllist[i];
+                document.getElementById("savepage-unsaved-panel-urls").appendChild(div);
+            }
+            
+            /* Select this tab */
+            
+            chrome.runtime.sendMessage({ type: "selectTab" });
+        }
+        else clickContinueOne();
+        
+        function clickContinueOne()
+        {
+            var i,div;
+            
+            /* Remove skipped resources */
+            
+            if (skipurllist.length > 0)
+            {
+                for (i = 0; i < skipurllist.length; i++)
+                {
+                    document.getElementById("savepage-unsaved-panel-nums").removeChild(document.getElementById("savepage-unsaved-panel-nums").children[0]);
+                    document.getElementById("savepage-unsaved-panel-infs").removeChild(document.getElementById("savepage-unsaved-panel-infs").children[0]);
+                    document.getElementById("savepage-unsaved-panel-urls").removeChild(document.getElementById("savepage-unsaved-panel-urls").children[0]);
+                }
+                
+                skipurllist.length = 0;
+            }
+            
+            /* Change listener for continue button */
+            
+            document.getElementById("savepage-unsaved-panel-continue").removeEventListener("click",clickContinueOne,false);
+            document.getElementById("savepage-unsaved-panel-continue").addEventListener("click",clickContinueTwo,false);
+            
+            /* Change text alignment of information column */
+            
+            document.getElementById("savepage-unsaved-panel-infs").style.setProperty("text-align","left","important");
+            
+            /* Populate failed resources */
+            
+            if (failurllist.length > 0)
+            {
+                document.getElementById("savepage-unsaved-panel-header").textContent = "Resources that could not be loaded";
+                
+                for (i = 0; i < failurllist.length; i++)
+                {
+                    div = document.createElement("div");
+                    div.textContent = (i+1);
+                    document.getElementById("savepage-unsaved-panel-nums").appendChild(div);
+                    
+                    div = document.createElement("div");
+                    div.textContent = failinflist[i];
+                    document.getElementById("savepage-unsaved-panel-infs").appendChild(div);
+                    
+                    div = document.createElement("div");
+                    div.textContent = failurllist[i];
+                    document.getElementById("savepage-unsaved-panel-urls").appendChild(div);
+                }
+                
+                failurllist.length = 0;
+                
+                /* Select this tab */
+                
+                chrome.runtime.sendMessage({ type: "selectTab" });
+            }
+            else clickContinueTwo();
+        }
+        
+        function clickContinueTwo()
+        {
+            document.documentElement.removeChild(document.getElementById("savepage-unsaved-panel-container"));
+            
+            enterComments();
+        }
+        
+        function clickCancel()
+        {
+            document.documentElement.removeChild(document.getElementById("savepage-unsaved-panel-container"));
+            
+            if (loadLazyContent != toggleLazy && lazyLoadType == 1) undoShrinkPage();
+            
+            saveState = -1;
+            
+            chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+        }
+    }
+}
+
+/************************************************************************/
+
+/* After second pass - prompt user to enter comments */
+
+function enterComments()
+{
+    var parser,commentsdoc,container,comments;
+    
+    /* Load comments panel */
+    
+    if (promptComments && !(skipWarningsComments && multipleSaves))
+    {
+        /* Parse comments document */
+        
+        parser = new DOMParser();
+        commentsdoc = parser.parseFromString(commentsPanel,"text/html");
+        
+        /* Create container element */
+        
+        container = document.createElement("div");
+        container.setAttribute("id","savepage-comments-panel-container");
+        document.documentElement.appendChild(container);
+        
+        /* Append page info elements */
+        
+        container.appendChild(commentsdoc.getElementById("savepage-comments-panel-overlay"));
+        
+        /* Add listeners for buttons */
+        
+        document.getElementById("savepage-comments-panel-continue").addEventListener("click",clickContinue,false);
+        document.getElementById("savepage-comments-panel-cancel").addEventListener("click",clickCancel,false);
+        
+        /* Focus text area */
+        
+        document.getElementById("savepage-comments-panel-textarea").focus();
+        
+        /* Populate comments contents */
+        
+        if (pageType > 0)  /* saved page */
+        {
+            comments = document.querySelector("meta[name='savepage-comments']").content;  /* decodes HTML entities */
+            
+            document.getElementById("savepage-comments-panel-textarea").value = comments;
+        }
+        
+        /* Select this tab */
+        
+        chrome.runtime.sendMessage({ type: "selectTab" });
+    }
+    else
+    {
+        chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 10 },  /* allow time for any open panel to close */
+        function(response)
+        {
+            generateHTML();
+        });
+    }
+    
+    function clickContinue()
+    {
+        var comments;
+        
+        comments = document.getElementById("savepage-comments-panel-textarea").value;
+        
+        comments = comments.replace(/&/g,"&amp;");
+        comments = comments.replace(/"/g,"&quot;");
+        comments = comments.replace(/\u000A/g,"&NewLine;");
+        
+        enteredComments = comments;
+        
+        document.documentElement.removeChild(document.getElementById("savepage-comments-panel-container"));
+        
+        chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 10 },  /* allow time for enter comments panel to close */
+        function(response)
+        {
+            generateHTML();
+        });
+    }
+    
+    function clickCancel()
+    {
+        document.documentElement.removeChild(document.getElementById("savepage-comments-panel-container"));
+        
+        if (loadLazyContent != toggleLazy && lazyLoadType == 1) undoShrinkPage();
+        
+        saveState = -1;
+        
+        chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+    }
+}
+
+/************************************************************************/
+
+/* Third Pass - to generate HTML and save to file */
+
+function generateHTML()
+{
+    var i,j,totalscans,totalloads,maxstrsize,totalstrsize,count,mimetype,charset,pageurl,htmlString,htmlIndex,filename,htmlBlob,objectURL,link;
+    
+    passNumber = 3;
+    
+    saveState = 3;  /* third pass */
+    
+    chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
+    
+    /* Generate HTML */
+    
+    timeStart[3] = performance.now();
+    
+    extractHTML(0,window,document.documentElement,false,false,"0",0,0);
+    
+    timeFinish[3] = performance.now();
+    
+    /* Append metrics and resource summary */
+    
+    if (includeSummary)
+    {
+        totalscans = timeFinish[1]-timeStart[1]+timeFinish[2]-timeStart[2]+timeFinish[3]-timeStart[3];
+        totalloads = timeFinish[4]-timeStart[4]+timeFinish[5]-timeStart[5];
+        
+        htmlStrings[htmlStrings.length] = "\n\n<!--\n\n";
+        
+        htmlStrings[htmlStrings.length] = "SAVE PAGE WE\n\n";
+        
+        htmlStrings[htmlStrings.length] = "Metrics and Resource Summary\n\n";
+        
+        htmlStrings[htmlStrings.length] = "Pass 1 scan:  " + ("     " + Math.round(timeFinish[1]-timeStart[1])).substr(-6) + " ms\n";
+        htmlStrings[htmlStrings.length] = "Pass 2 scan:  " + ("     " + Math.round(timeFinish[2]-timeStart[2])).substr(-6) + " ms\n";
+        htmlStrings[htmlStrings.length] = "Pass 3 scan:  " + ("     " + Math.round(timeFinish[3]-timeStart[3])).substr(-6) + " ms\n";
+        htmlStrings[htmlStrings.length] = "Total scans:  " + ("     " + Math.round(totalscans)).substr(-6) + " ms\n\n";
+        
+        htmlStrings[htmlStrings.length] = "Pass 1 loads: " + ("     " + Math.round(timeFinish[4]-timeStart[4])).substr(-6) + " ms\n";
+        htmlStrings[htmlStrings.length] = "Pass 2 loads: " + ("     " + Math.round(timeFinish[5]-timeStart[5])).substr(-6) + " ms\n";
+        htmlStrings[htmlStrings.length] = "Total loads:  " + ("     " + Math.round(totalloads)).substr(-6) + " ms\n\n";
+        
+        htmlStrings[htmlStrings.length] = "String count:     "  + ("    " + htmlStrings.length).substr(-5) + "\n";
+        
+        maxstrsize = totalstrsize = 0;
+        
+        for (i = 0; i < htmlStrings.length; i++)
+        {
+            totalstrsize += htmlStrings[i].length;
+            
+            if (htmlStrings[i].length > maxstrsize) maxstrsize = htmlStrings[i].length;
+        }
+        
+        htmlStrings[htmlStrings.length] = "Max size:      "  + ("       " + maxstrsize).substr(-8) + "\n";
+        htmlStrings[htmlStrings.length] = "Total size:   "  + ("        " + totalstrsize).substr(-9) + "\n\n";
+        
+        htmlStrings[htmlStrings.length] = "Resource count:    "  + ("   " + resourceLocation.length).substr(-4) + "\n";
+        
+        if (pageType == 0)
+        {
+            htmlStrings[htmlStrings.length] = "\nNum  Refs  Reps  Status   Reason     MimeType    CharSet   ByteSize    URL\n\n";
+            
+            for (i = 0; i < resourceLocation.length; i++)
+            {
+                count = mergeCSSImages ? resourceRemembered[i]-resourceCSSRemembered[i]+Object.keys(resourceCSSFrameKeys[i]).length : resourceRemembered[i];
+                
+                j = resourceMimeType[i].indexOf("/");
+                
+                mimetype = resourceMimeType[i].substr(0,j).substr(0,5);
+                mimetype += "/";
+                mimetype += resourceMimeType[i].substr(j+1,4);
+                
+                charset = (resourceCharSet[i] == "") ? "binary" : resourceCharSet[i];
+                
+                htmlStrings[htmlStrings.length] = ("   " + i).substr(-3) + "  " +
+                                                  ("    " + resourceRemembered[i]).substr(-4) + "  " +
+                                                  ("    " + resourceReplaced[i]).substr(-4) + "  " +
+                                                  resourceStatus[i] + "  " +
+                                                  (resourceReason[i] + "         ").substr(0,9) + "  " +
+                                                  (mimetype + "          ").substr(0,10) + "  " +
+                                                  (charset + "        ").substr(0,8) + "  " +
+                                                  ("        " + resourceContent[i].length).substr(-8) + "    " +
+                                                  resourceLocation[i] + "\n";
+            }
+        }
+        
+        htmlStrings[htmlStrings.length] = "\n-->\n";
+    }
+    
+    /* Release resources */
+    
+    frameKey.length = 0;
+    frameURL.length = 0;
+    frameHTML.length = 0;
+    frameFonts.length = 0;
+    
+    resourceLocation.length = 0;
+    resourceReferrer.length = 0;
+    resourceMimeType.length = 0;
+    resourceCharSet.length = 0;
+    resourcePassive.length = 0;
+    resourceContent.length = 0;
+    resourceStatus.length = 0;
+    resourceReason.length = 0;
+    resourceRemembered.length = 0;
+    resourceReplaced.length = 0;
+    resourceCSSRemembered.length = 0;
+    resourceCSSFrameKeys.length = 0;
+    
+    firstIconLocation = "";
+    rootIconLocation = "";
+    
+    enteredComments = "";
+    
+    if (loadLazyContent != toggleLazy && lazyLoadType == 1)
+    {
+        undoShrinkPage();
+        
+        for (i = 0; i < htmlStrings.length; i++)
+        {
+            if (htmlStrings[i].indexOf("<html") == 0)
+            {
+                htmlStrings[i] = htmlStrings[i].replace(/ style="(?:\\"|[^"])*"/," style=\"" + htmlCssText.replace(/"/g,"&quot;") + "\"");
+            }
+            else if (htmlStrings[i].indexOf("<body") == 0)
+            {
+                htmlStrings[i] = htmlStrings[i].replace(/ style="(?:\\"|[^"])*"/," style=\"" + bodyCssText.replace(/"/g,"&quot;") + "\"");
+                
+                break;
+            }
+        }
+    }
+    
+    if (cancelSave)
+    {
+        htmlStrings.length = 0;
+        
+        saveState = -1;
+        
+        chrome.runtime.sendMessage({ type: "saveExit", pagetype: pageType, savestate: saveState });
+    }
+    else if (useNewSaveMethod || useAutomation)  /* use new save method - chrome.downloads.download() */ 
+    {
+        // createLargeTestFile();
+        
+        pageurl = (pageType == 0) ? document.URL : document.querySelector("meta[name='savepage-url']").content;
+        
+        filename = getSavedFileName(pageurl,document.title,false);
+        
+        /* Transfer html strings to download iframe script */
+        
+        htmlString = "";
+        htmlIndex = 0;
+        
+        for (i = 0; i < htmlStrings.length; i++)
+        {
+            htmlString += htmlStrings[i];
+            
+            if (htmlString.length >= 1024*1024 || i == htmlStrings.length-1)  /* >= 1MB */
+            {
+                chrome.runtime.sendMessage({ type: "transferString", htmlstring: htmlString, htmlindex: htmlIndex });
+                
+                htmlString = "";
+                htmlIndex++;
+            }
+        }
+        
+        htmlStrings.length = 0;
+        
+        /* Save page in download iframe script */
+        
+        chrome.runtime.sendMessage({ type: "savePage", filename: filename });
+    }
+    else  /* use old save method - HTML5 download attribute */
+    {
+        // createLargeTestFile();
+        
+        pageurl = (pageType == 0) ? document.URL : document.querySelector("meta[name='savepage-url']").content;
+        
+        filename = getSavedFileName(pageurl,document.title,false);
+        
+        /* Convert html strings to html blob */
+        
+        htmlBlob = new Blob(htmlStrings, { type : "text/html" });
+        
+        objectURL = window.URL.createObjectURL(htmlBlob);
+        
+        htmlBlob = null;
+        
+        htmlStrings.length = 0;
+        
+        /* Save page using HTML5 download attribute */
+        
+        link = document.createElement("a");
+        link.download = filename;
+        link.href = objectURL;
+        
+        link.addEventListener("click",handleClick,true);
+        
+        link.dispatchEvent(new MouseEvent("click"));  /* save page as .html file */
+        
+        link.removeEventListener("click",handleClick,true);
+        
+        function handleClick(event)
+        {
+            event.stopPropagation();
+        }
+        
+        chrome.runtime.sendMessage({ type: "setDelay", milliseconds: 100 },  /* allow time before revoking object URL */
+        function(response)
+        {
+            window.URL.revokeObjectURL(objectURL);
+            
+            saveState = 6;
+            
+            chrome.runtime.sendMessage({ type: "saveDone", success: true, pagetype: pageType, savestate: saveState   });
+        });
+    }
+}
+
+function undoShrinkPage()
+{
+    document.documentElement.style.cssText = htmlCssText;
+    document.body.style.cssText = bodyCssText;
+
+    window.scrollTo(0,origScrollY);
+}
+
+function createLargeTestFile()
+{
+    /* Create htmlStrings to test large saved file sizes */
+    
+    var i,j;
+    
+    var fileSizeMB = 1024;
+    
+    var string32 = "|--abcdefghijklmnopqrstuvwxyz--|";
+    
+    htmlStrings.length = 0;
+    
+    for (i = 0; i < fileSizeMB; i++)
+    {
+        htmlStrings[i] = "";
+        
+        for (j = 0; j < 1024*1024/32; j++) htmlStrings[i] += string32;
+    }
+}
+
+function extractHTML(depth,frame,element,crossframe,nosrcframe,framekey,parentpreserve,indent)
+{
+    var i,j,tagName,startTag,textContent,endTag,inline,preserve,style,display,position,whitespace,displayed,csstext,baseuri,documenturi,separator,origurl,datauri,origstr,dupelement,dupsheet,location,newurl;
+    var visible,width,height,currentsrc,svgstr,parser,svgdoc,svgfragid,svgelement,svghref,subframekey,startindex,endindex,htmltext,origsrcdoc,origsandbox,framedoc,prefix,shadowroot;
+    var doctype,target,text,asciistring,date,datestr,pubelement,pubstr,pubzone,pubdate,pubdatestr,pageurl,state;
+    var pubmatches = [];
+    var metadataElements = ["base","link","meta","noscript","script","style","template","title"];  /* HTML Living Standard 3.2.5.2.1 Metadata Content */
+    var voidElements = ["area","base","br","col","command","embed","frame","hr","img","input","keygen","link","menuitem","meta","param","source","track","wbr"];  /* W3C HTML5 2011 4.3 Elements + menuitem */
+    var retainElements = ["html","head","body","base","command","link","meta","noscript","script","style","template","title"];
+    var hiddenElements = ["area","base","datalist","head","link","meta","param","rp","script","source","style","template","track","title"];  /* W3C HTML5 2014 10.3.1 Hidden Elements */
+    
+    /* Check for <button> element inside ancestor <button> element - W3C HTML5 2011 4.10.8 The button Element (no interactive content) */
+    
+    if (element.localName == "button" && element.parentElement != null && element.parentElement.closest("button") != null) tagName = "span";
+    else tagName = element.localName;
+    
+    /* Create element start and end tags */
+    
+    startTag = "<" + tagName;
+    for (i = 0; i < element.attributes.length; i++)
+    {
+        if (element.attributes[i].name != "zoompage-fontsize")
+        {
+            startTag += " " + element.attributes[i].name;
+            startTag += "=\"";
+            startTag += element.attributes[i].value.replace(/"/g,"&quot;");
+            startTag += "\"";
+        }
+    }
+    if (element.parentElement != null && element.parentElement.localName == "head" && metadataElements.indexOf(tagName) < 0)
+    {
+        /* Non-metadata element in head will be moved to body when saved page is opened */
+        /* Add hidden attribute to keep element hidden */
+        
+        startTag += " data-savepage-nonmetadata=\"\" hidden=\"\"";
+    }
+    startTag += ">";
+    
+    textContent = "";
+    
+    if (voidElements.indexOf(tagName) >= 0) endTag = "";
+    else endTag = "</" + tagName + ">";
+    
+    /* Determine if element is phrasing content - set inline based on CSS display value */
+    
+    /* Determine if element format should be preserved - set preserve based on CSS white-space value */
+    /*   0 = collapse newlines, collapse spaces (normal or nowrap) */
+    /*   1 = preserve newlines, collapse spaces (pre-line)         */
+    /*   2 = preserve newlines, preserve spaces (pre or pre-wrap)  */
+    
+    if (pageType == 0 && formatHTML && depth == 0)
+    {
+        if (crossframe)
+        {
+            /* In a cross-origin frame, the document created by DOMParser */
+            /* does not have an associated frame window, which means that */
+            /* the window.getComputedStyle() function cannot be called.   */
+            
+            /* Assume all elements are block with collapsed newlines and spaces */
+            
+            inline = false;
+            preserve = 0;
+        }
+        else if ((style = frame.getComputedStyle(element)) == null)  /* should not happen */
+        {
+            inline = false;
+            preserve = 0;
+        }
+        else
+        {
+            display = style.getPropertyValue("display");
+            position = style.getPropertyValue("position");
+            whitespace = style.getPropertyValue("white-space");
+            
+            if (display.indexOf("inline") >= 0 || (display == "none" && document.body.contains(element))) inline = true;
+            else if (position == "absolute" || position == "fixed") inline = true;
+            else inline = false;
+            
+            if (whitespace == "pre" || whitespace == "pre-wrap") preserve = 2;
+            else if (whitespace == "pre-line") preserve = 1;
+            else /* normal or nowrap */ preserve = 0;
+        }
+    }
+    else
+    {
+        inline = false;
+        preserve = 0;
+    }
+    
+    /* Determine if element is displayed */
+    
+    if (crossframe)
+    {
+        /* In a cross-origin frame, the document created by DOMParser */
+        /* does not have an associated frame window, which means that */
+        /* the window.getComputedStyle() function cannot be called.   */
+        
+        /* Assume all elements are displayed */
+        
+        displayed = true;
+    }
+    else if ((style = frame.getComputedStyle(element)) == null) displayed = true;  /* should not happen */
+    else displayed = (style.getPropertyValue("display") != "none");  /* element not collapsed */
+    
+    /* Extract HTML from DOM and replace external resources with data URI's */
+    
+    /* External images referenced in any element's style attribute */
+    
+    if (element.hasAttribute("style"))
+    {
+        csstext = element.getAttribute("style");
+        
+        baseuri = element.ownerDocument.baseURI;
+        
+        documenturi = element.ownerDocument.documentURI;
+        
+        csstext = replaceCSSImageURLs(csstext,baseuri,documenturi,framekey);
+        
+        startTag = startTag.replace(/ style="(?:\\"|[^"])*"/," style=\"" + csstext.replace(/"/g,"&quot;") + "\"");
+    }
+    
+    /* Remove or Rehide elements */
+    
+    if (removeElements)
+    {
+        /* Remove elements that have been collapsed by the page, page editors or content blockers - so are not displayed */
+        /* Do not remove elements that are essential */
+        /* Do not remove <svg> elements because child elements may be referenced by <use> elements in other <svg> elements */
+    
+        if (retainElements.indexOf(element.localName) < 0 && !(element instanceof SVGElement) && !displayed)
+        {
+            htmlStrings[htmlStrings.length] = "<!--savepage-" + element.localName + "-remove-->";
+            
+            return;
+        }
+    }
+    else if (rehideElements)
+    {
+        /* Rehide elements that have been collapsed by the page, page editors or content blockers - so are not displayed */
+        /* Do not hide elements that are hidden by default */
+        
+        if (hiddenElements.indexOf(element.localName) < 0 && !displayed)
+        {
+            csstext = "/*savepage-rehide*/ display: none !important;";
+            
+            if (element.hasAttribute("style"))
+            {
+                if (element.getAttribute("style").trim().substr(-1) != ";") separator = "; ";
+                else separator = " ";
+                
+                startTag = startTag.replace(/ style="(?:\\"|[^"])*"/," style=\"" + element.getAttribute("style").replace(/"/g,"&quot;") + separator + csstext + "\"");
+            }
+            else startTag = startTag.replace("<" + element.localName,"<" + element.localName + " style=\"" + csstext + "\"");
+        }
+    }
+    
+    /* Content Security Policy in <meta> element */
+    
+    if (element.localName == "meta")
+    {
+        if (element.httpEquiv.toLowerCase() == "content-security-policy")
+        {
+            origstr = " data-savepage-content=\"" + element.content + "\"";
+            
+            startTag = startTag.replace(/ content="(?:\\"|[^"])*"/,origstr + " content=\"\"");
+        }
+    }
+    
+    /* External script referenced in <script> element */
+    /* Internal script in <script> element */
+    
+    else if (element.localName == "script")
+    {
+        if ((savedItems == 2 && saveScripts) && !crossframe && !nosrcframe)
+        {
+            if (element.getAttribute("src"))  /* external script */
+            {
+                if (replaceableResourceURL(element.src))
+                {
+                    baseuri = element.ownerDocument.baseURI;
+                    
+                    documenturi = element.ownerDocument.documentURI;
+                    
+                    origurl = element.getAttribute("src");
+                    
+                    datauri = replaceURL(origurl,baseuri,documenturi);
+                    
+                    origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                }
+            }
+            else  /* internal script */
+            {
+                textContent = element.textContent;
+            }
+            
+            if (!executeScripts)
+            {
+                if (element.hasAttribute("type")) origstr = " data-savepage-type=\"" + element.getAttribute("type") + "\"";
+                else origstr = " data-savepage-type=\"\"";
+                
+                if (element.hasAttribute("type")) startTag = startTag.replace(/ type="[^"]*"/,origstr + " type=\"text/plain\"");
+                else startTag = startTag.replace(/<script/,"<script" + origstr + " type=\"text/plain\"");
+            }
+        }
+        else
+        {
+            if (element.getAttribute("src"))  /* external script */
+            {
+                origurl = element.getAttribute("src");
+                
+                origstr = " data-savepage-src=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ src="[^"]*"/,origstr + "");  /* replacing with src="" would be invalid HTML */
+            }
+            
+            if (element.hasAttribute("type")) origstr = " data-savepage-type=\"" + element.getAttribute("type") + "\"";
+            else origstr = " data-savepage-type=\"\"";
+            
+            if (element.hasAttribute("type")) startTag = startTag.replace(/ type="[^"]*"/,origstr + " type=\"text/plain\"");
+            else startTag = startTag.replace(/<script/,"<script" + origstr + " type=\"text/plain\"");
+        }
+    }
+    
+    /* External images or fonts referenced in <style> element */
+    
+    else if (element.localName == "style")
+    {
+        if (element.id == "zoompage-pageload-style" || element.id == "zoompage-zoomlevel-style" || element.id == "zoompage-fontsize-style")  /* Zoom Page WE */
+        {
+            startTag = "";
+            endTag = "";
+            textContent = "";
+        }
+        else if (element.hasAttribute("class") && element.getAttribute("class").indexOf("darkreader") >= 0)  /* Dark Reader*/
+        {
+            startTag = "";
+            endTag = "";
+            textContent = "";
+        }
+        else
+        {
+            if (!element.disabled)
+            {
+                if (element.hasAttribute("data-savepage-sheetrules"))
+                {
+                    csstext = element.getAttribute("data-savepage-sheetrules");
+                    
+                    startTag = startTag.replace(/ data-savepage-sheetrules="(?:\\"|[^"])*"/," data-savepage-sheetrules=\"\"");
+                }
+                else
+                {
+                    try
+                    {
+                        /* Count rules in element.textContent by creating duplicate element */
+                        
+                        dupelement = element.ownerDocument.createElement("style");
+                        dupelement.textContent = element.textContent;
+                        element.ownerDocument.body.appendChild(dupelement);
+                        dupsheet = dupelement.sheet;
+                        dupelement.remove();
+                        
+                        /* There may be rules in element.sheet.cssRules that are not in element.textContent */
+                        /* For example if the page uses CSS-in-JS Libraries */
+                        
+                        if (dupsheet.cssRules.length != element.sheet.cssRules.length)
+                        {
+                            csstext = "";
+                            
+                            for (i = 0; i < element.sheet.cssRules.length; i++)
+                                csstext += element.sheet.cssRules[i].cssText + "\n";
+                            
+                            startTag = startTag.replace(/<style/,"<style data-savepage-sheetrules=\"\"");
+                        }
+                        else csstext = element.textContent;
+                    }
+                    catch (e)  /* sheet.cssRules does not exist or cross-origin style sheet */
+                    {
+                        csstext = element.textContent;
+                    }
+                }
+                
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                textContent = replaceCSSURLsInStyleSheet(csstext,baseuri,documenturi,[],framekey);
+                
+                if (swapDevices) textContent = swapScreenAndPrintDevices(textContent);
+            }
+            else
+            {
+                startTag = startTag.replace(/<style/,"<style data-savepage-disabled=\"\"");
+                
+                textContent = "";
+            }
+        }
+    }
+    
+    /* External images or fonts referenced in <link> element */
+    /* External icon referenced in <link> element */
+    
+    else if (element.localName == "link" && !(element.parentElement instanceof SVGElement))  /* <link> is invalid inside <svg> */
+    {
+        if (element.rel.toLowerCase().indexOf("stylesheet") >= 0 && element.getAttribute("href"))
+        {
+            if (!element.disabled)
+            {
+                if (replaceableResourceURL(element.href))
+                {
+                    baseuri = element.ownerDocument.baseURI;
+                    
+                    if (baseuri != null)
+                    {
+                        location = resolveURL(element.href,baseuri);
+                        
+                        if (location != null)
+                        {
+                            location = removeFragment(location);
+                            
+                            for (i = 0; i < resourceLocation.length; i++)
+                                if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
+                            
+                            if (i < resourceLocation.length)  /* style sheet found */
+                            {
+                                csstext = resourceContent[i];
+                                
+                                /* Converting <link> into <style> means that CSS rules are embedded in saved HTML file */
+                                /* Therefore need to escape any </style> end tags that may appear inside CSS strings */
+                                
+                                csstext = csstext.replace(/<\/style>/gi,"<\\/style>");
+                                
+                                baseuri = element.href;
+                                
+                                documenturi = element.href;
+                                
+                                textContent = replaceCSSURLsInStyleSheet(csstext,baseuri,documenturi,[location],framekey);
+                                
+                                if (swapDevices) textContent = swapScreenAndPrintDevices(textContent);
+                                
+                                startTag = "<style data-savepage-href=\"" + element.getAttribute("href") + "\"";
+                                if (element.type != "") startTag += " type=\"" + element.type + "\"";
+                                if (element.media != "") startTag += " media=\"" + element.media + "\"";
+                                startTag += ">";
+                                endTag = "</style>";
+                                
+                                resourceReplaced[i]++;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                origurl = element.getAttribute("href");
+                
+                origstr = " data-savepage-href=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/<link/,"<link data-savepage-disabled=\"\"");
+                startTag = startTag.replace(/ href="[^"]*"/,origstr + " href=\"\"");
+            }
+        }
+        else if ((element.rel.toLowerCase() == "icon" || element.rel.toLowerCase() == "shortcut icon") && element.getAttribute("href"))
+        {
+            if (replaceableResourceURL(element.href))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("href");
+                
+                datauri = replaceURL(origurl,baseuri,documenturi);
+                
+                origstr = (datauri == origurl) ? "" : " data-savepage-href=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ href="[^"]*"/,origstr + " href=\"" + datauri + "\"");
+            }
+        }
+        else if (element.rel.toLowerCase().indexOf("dns-prefetch") >= 0 || element.rel.toLowerCase().indexOf("preconnect") >= 0 ||
+                 element.rel.toLowerCase().indexOf("prefetch") >= 0 || element.rel.toLowerCase().indexOf("preload") >= 0 ||
+                 element.rel.toLowerCase().indexOf("prerender") >= 0)
+        {
+            origurl = element.getAttribute("href");
+            
+            origstr = " data-savepage-href=\"" + origurl + "\"";
+            
+            startTag = startTag.replace(/ href="[^"]*"/,origstr + " href=\"\"");
+        }
+        else  /* unsaved url */
+        {
+            baseuri = element.ownerDocument.baseURI;
+            
+            documenturi = element.ownerDocument.documentURI;
+            
+            origurl = element.getAttribute("href");
+            
+            newurl = unsavedURL(origurl,baseuri,documenturi);
+            
+            origstr = (newurl == origurl) ? "" : " data-savepage-href=\"" + origurl + "\"";
+            
+            startTag = startTag.replace(/ href="[^"]*"/,origstr + " href=\"" + newurl + "\"");
+        }
+    }
+    else if (element.localName == "link" && (element.parentElement instanceof SVGElement))
+    {
+        /* Workaround for <link> element inside <svg> fragment which is invalid */
+        
+        startTag = "";
+        endTag = "";
+    }
+    
+    /* External location referenced in <a> or <area> element */
+    /* Internal location referenced in <a> or <area> element */
+    
+    else if ((element.localName == "a" && element instanceof HTMLElement) || element.localName == "area")
+    {
+        if (element.getAttribute("href"))
+        {
+            baseuri = element.ownerDocument.baseURI;
+            
+            documenturi = element.ownerDocument.documentURI;
+            
+            origurl = element.getAttribute("href");
+            
+            newurl = adjustURL(origurl,baseuri,documenturi);
+            
+            if (newurl != origurl)
+            {
+                origstr = " data-savepage-href=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ href="[^"]*"/,origstr + " href=\"" + newurl + "\"");
+            }
+        }
+    }
+    
+    /* External image referenced in <body> element */
+    
+    else if (element.localName == "body")
+    {
+        if (element.getAttribute("background"))
+        {
+            if (replaceableResourceURL(element.background))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("background");
+                
+                datauri = replaceURL(origurl,baseuri,documenturi);
+                
+                origstr = (datauri == origurl) ? "" : " data-savepage-background=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ background="[^"]*"/,origstr + " background=\"" + datauri + "\"");
+            }
+        }
+    }
+    
+    /* External image referenced in <img> element - can be inside <picture> element */
+    
+    else if (element.localName == "img")
+    {
+        /* Remove src/srcset of images that have been hidden by the page, page editors or content blockers - so are not visible */
+        
+        if (removeElements)
+        {
+            if (crossframe)
+            {
+                /* In a cross-origin frame, the document created by DOMParser */
+                /* does not have an associated frame window, which means that */
+                /* the window.getComputedStyle() function cannot be called.   */
+                
+                /* Assume all images are visible */
+                
+                visible = true;
+            }
+            else if ((style = frame.getComputedStyle(element)) == null) visible = true;  /* should not happen */
+            else visible = (style.getPropertyValue("visibility") != "hidden" && style.getPropertyValue("opacity") != "0");  /* element hidden */
+        }
+        else visible = true;
+        
+        if (!visible)
+        {
+            width = style.getPropertyValue("width");
+            height = style.getPropertyValue("height");
+            
+            csstext = "/*savepage-remove*/ width: " + width + " !important; height: " + height + " !important;";
+            
+            if (element.hasAttribute("style"))
+            {
+                if (element.getAttribute("style").trim().substr(-1) != ";") separator = "; ";
+                else separator = " ";
+                
+                startTag = startTag.replace(/ style="(?:\\"|[^"])*"/," style=\"" + element.getAttribute("style").replace(/"/g,"&quot;") + separator + csstext + "\"");
+            }
+            else startTag = startTag.replace(/<img/,"<img style=\"" + csstext + "\"");
+            
+            startTag = startTag.replace(/ src="[^"]*"/,"");
+            
+            startTag = startTag.replace(/ srcset="[^"]*"/,"");
+        }
+        else
+        {
+            /* currentSrc is set from src or srcset attributes on this <img> element */
+            /* or from srcset attribute on <source> element inside <picture> element */
+            
+            /* Firefox - workaround because element.currentSrc may be empty string in cross-origin frames */
+            
+            currentsrc = (element.currentSrc != "") ? element.currentSrc : (element.getAttribute("src") ? element.src : "");
+            
+            /* Chrome - workaround because element.currentSrc may have wrong fragment identifier for SVG images */
+            
+            currentsrc = (element.currentSrc.indexOf("#") < 0) ? element.currentSrc : (element.getAttribute("src") ? element.src : "");
+            
+            if (currentsrc != "")  /* currentSrc set from src or srcset attribute */
+            {
+                if (replaceableResourceURL(currentsrc))
+                {
+                    baseuri = element.ownerDocument.baseURI;
+                    
+                    documenturi = element.ownerDocument.documentURI;
+                    
+                    origurl = element.getAttribute("src");
+                    
+                    datauri = replaceURL(currentsrc,baseuri,documenturi);
+                    
+                    origstr = (currentsrc == origurl) ? "" : " data-savepage-currentsrc=\"" + currentsrc + "\"";
+                    origstr += " data-savepage-src=\"" + origurl + "\"";
+                    
+                    if (element.hasAttribute("src")) startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                    else startTag = startTag.replace(/<img/,"<img" + origstr + " src=\"" + datauri + "\"");
+                }
+                else if (currentsrc.substr(0,5).toLowerCase() == "data:")  /* data uri */
+                {
+                    origurl = element.getAttribute("src");
+                    
+                    datauri = currentsrc;
+                    
+                    origstr = (datauri == origurl) ? " " : " data-savepage-src=\"" + origurl + "\"";
+                    
+                    if (element.hasAttribute("src")) startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                    else startTag = startTag.replace(/<img/,"<img" + origstr + " src=\"" + datauri + "\"");
+                }
+                else if (element.hasAttribute("data-savepage-blobdatauri") || currentsrc.substr(0,5) == "blob:")  /* blob url */
+                {
+                    baseuri = element.ownerDocument.baseURI;
+                    
+                    documenturi = element.ownerDocument.documentURI;
+                    
+                    origurl = element.getAttribute("src");
+                    
+                    if (element.hasAttribute("data-savepage-blobdatauri")) datauri = element.getAttribute("data-savepage-blobdatauri");
+                    else datauri = createCanvasDataURL(currentsrc,baseuri,documenturi,element);
+                    
+                    origstr = (currentsrc == origurl) ? "" : " data-savepage-currentsrc=\"" + currentsrc + "\"";
+                    origstr += " data-savepage-src=\"" + origurl + "\"";
+                    
+                    if (element.hasAttribute("src")) startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                    else startTag = startTag.replace(/<img/,"<img" + origstr + " src=\"" + datauri + "\"");
+                    
+                    startTag = startTag.replace(/ data-savepage-blobdatauri="[^"]*"/,"");
+                }
+            }
+            
+            if (element.getAttribute("srcset"))
+            {
+                /* Remove srcset URLs - currentSrc may be set to one of these URLs - other URls are unsaved */
+                
+                origurl = element.getAttribute("srcset");
+                
+                origstr = " data-savepage-srcset=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ srcset="[^"]*"/,origstr + " srcset=\"\"");
+            }
+        }
+    }
+    
+    /* External image referenced in <input> element */
+    /* Reinstate checked state or text value of <input> element */
+    
+    else if (element.localName == "input")
+    {
+        if (element.type.toLowerCase() == "image" && element.getAttribute("src"))
+        {
+            if (replaceableResourceURL(element.src))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("src");
+                
+                datauri = replaceURL(origurl,baseuri,documenturi);
+                
+                origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+            }
+        }
+        
+        if (element.type.toLowerCase() == "file" || element.type.toLowerCase() == "password")
+        {
+            /* maintain security */
+            
+            if (element.hasAttribute("value")) startTag = startTag.replace(/ value="[^"]*"/," value=\"\"");
+            else startTag = startTag.replace(/>$/," value=\"\">");
+        }
+        else if (element.type.toLowerCase() == "checkbox" || element.type.toLowerCase() == "radio")
+        {
+            if (!element.checked) startTag = startTag.replace(/ checked="[^"]*"/,"");
+            else if (!element.hasAttribute("checked")) startTag = startTag.replace(/>$/," checked=\"\">");
+        }
+        else
+        {
+            if (element.hasAttribute("value")) startTag = startTag.replace(/ value="[^"]*"/," value=\"" + element.value + "\"");
+            else startTag = startTag.replace(/>$/," value=\"" + element.value + "\">");
+        }
+    }
+    
+    /* Reinstate text value of <textarea> element */
+    
+    else if (element.localName == "textarea")
+    {
+        textContent = element.value;
+    }
+    
+    /* Reinstate selected state of <option> element */
+    
+    else if (element.localName == "option")
+    {
+        if (element.selected) startTag = startTag.replace(/ selected="[^"]*"/," selected=\"\"");
+        else startTag = startTag.replace(/ selected="[^"]*"/,"");
+    }
+    
+    /* Graphics drawn within <canvas> element */
+    
+    else if (element.localName == "canvas")
+    {
+        csstext = "background-attachment: scroll !important; " + "background-blend-mode: normal !important; " +
+                  "background-clip: content-box !important; " + "background-color: transparent !important; " +
+                  "background-origin: content-box !important; " + "background-position: center center !important; " +
+                  "background-repeat: no-repeat !important; " + "background-size: 100% 100% !important;";
+                  
+        if (element.hasAttribute("data-savepage-canvasdatauri"))  /* canvas data url */
+        {
+            datauri = element.getAttribute("data-savepage-canvasdatauri");
+            
+            csstext = "/*savepage-canvas-image*/ " + "background-image: url(" + datauri + ") !important; " + csstext;
+        }
+        else
+        {
+            try
+            {
+                datauri = element.toDataURL("image/png","");
+                
+                csstext = "/*savepage-canvas-image*/ " + "background-image: url(" + datauri + ") !important; " + csstext;
+            }
+            catch (e) { csstext = "/*savepage-canvas-dirty*/"; }
+        }
+        
+        if (element.hasAttribute("style"))
+        {
+            if (element.getAttribute("style").trim().substr(-1) != ";") separator = "; ";
+            else separator = " ";
+            
+            startTag = startTag.replace(/ style="(?:\\"|[^"])*"/," style=\"" + element.getAttribute("style").replace(/"/g,"&quot;") + separator + csstext + "\"");
+        }
+        else startTag = startTag.replace(/<canvas/,"<canvas style=\"" + csstext + "\"");
+    }
+    
+    /* External audio referenced in <audio> element */
+    
+    else if (element.localName == "audio")
+    {
+        if (element.getAttribute("src"))
+        {
+            if (element.src == element.currentSrc)
+            {
+                if (replaceableResourceURL(element.src))
+                {
+                    baseuri = element.ownerDocument.baseURI;
+                    
+                    documenturi = element.ownerDocument.documentURI;
+                    
+                    origurl = element.getAttribute("src");
+                    
+                    datauri = replaceURL(origurl,baseuri,documenturi);
+                    
+                    origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                }
+            }
+            else  /* unsaved url */
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("src");
+                
+                newurl = unsavedURL(origurl,baseuri,documenturi);
+                
+                origstr = (newurl == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + newurl + "\"");
+            }
+        }
+    }
+    
+    /* External video referenced in <video> element */
+    
+    else if (element.localName == "video")
+    {
+        if (element.getAttribute("src"))
+        {
+            if (element.src == element.currentSrc)
+            {
+                if (replaceableResourceURL(element.src))
+                {
+                    baseuri = element.ownerDocument.baseURI;
+                    
+                    documenturi = element.ownerDocument.documentURI;
+                    
+                    origurl = element.getAttribute("src");
+                    
+                    datauri = replaceURL(origurl,baseuri,documenturi);
+                    
+                    origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                }
+            }
+            else  /* unsaved url */
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("src");
+                
+                newurl = unsavedURL(origurl,baseuri,documenturi);
+                
+                origstr = (newurl == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + newurl + "\"");
+            }
+        }
+        
+        if (element.getAttribute("poster"))
+        {
+            if (replaceableResourceURL(element.poster))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+               
+                origurl = element.getAttribute("poster");
+                
+                datauri = replaceURL(origurl,baseuri,documenturi);
+                
+                origstr = (datauri == origurl) ? "" : " data-savepage-poster=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ poster="[^"]*"/,origstr + " poster=\"" + datauri + "\"");
+            }
+        }
+        else if (element.hasAttribute("data-savepage-blobdatauri") || element.src.substr(0,5) == "blob:")
+        {
+            baseuri = element.ownerDocument.baseURI;
+            
+            documenturi = element.ownerDocument.documentURI;
+            
+            origurl = element.getAttribute("src");
+            
+            if (element.hasAttribute("data-savepage-blobdatauri")) datauri = element.getAttribute("data-savepage-blobdatauri");
+            else datauri = createCanvasDataURL(origurl,baseuri,documenturi,element);
+            
+            origstr = (datauri == origurl) ? "" : " data-savepage-poster=\"\"";
+            
+            startTag = startTag.replace(/<video/,"<video" + origstr + " poster=\"" + datauri + "\"");
+            
+            startTag = startTag.replace(/ data-savepage-blobdatauri="[^"]*"/,"");
+        }
+    }
+    
+    /* External audio/video/image referenced in <source> element */
+    
+    else if (element.localName == "source")
+    {
+        if (element.parentElement)
+        {
+            if (element.parentElement.localName == "audio" || element.parentElement.localName == "video")
+            {
+                if (element.getAttribute("src"))
+                {
+                    if (element.src == element.parentElement.currentSrc)
+                    {
+                        if (replaceableResourceURL(element.src))
+                        {
+                            baseuri = element.ownerDocument.baseURI;
+                            
+                            documenturi = element.ownerDocument.documentURI;
+                            
+                            origurl = element.getAttribute("src");
+                            
+                            datauri = replaceURL(origurl,baseuri,documenturi);
+                            
+                            origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                            
+                            startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                        }
+                    }
+                    else  /* unsaved url */
+                    {
+                        baseuri = element.ownerDocument.baseURI;
+                        
+                        documenturi = element.ownerDocument.documentURI;
+                        
+                        origurl = element.getAttribute("src");
+                        
+                        newurl = unsavedURL(origurl,baseuri,documenturi);
+                        
+                        origstr = (newurl == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                        
+                        startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + newurl + "\"");
+                    }
+                }
+            }
+            else if (element.parentElement.localName == "picture")
+            {
+                /* Remove srcset URLs - currentSrc may be set to one of these URLs - other URls are unsaved */
+                
+                if (element.getAttribute("srcset"))
+                {
+                    origurl = element.getAttribute("srcset");
+                    
+                    origstr = " data-savepage-srcset=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ srcset="[^"]*"/,origstr + " srcset=\"\"");
+                }
+            }
+        }
+    }
+    
+    /* External subtitles referenced in <track> element */
+    
+    else if (element.localName == "track")
+    {
+        if (element.getAttribute("src"))
+        {
+            if (replaceableResourceURL(element.src))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("src");
+                
+                datauri = replaceURL(origurl,baseuri,documenturi);
+                
+                origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+            }
+        }
+    }
+    
+    /* External data referenced in <object> element */
+    
+    else if (element.localName == "object")
+    {
+        if (element.getAttribute("data"))
+        {
+            if (replaceableResourceURL(element.data))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("data");
+                
+                datauri = replaceURL(origurl,baseuri,documenturi);
+                
+                origstr = (datauri == origurl) ? "" : " data-savepage-data=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ data="[^"]*"/,origstr + " data=\"" + datauri + "\"");
+            }
+        }
+    }
+    
+    /* External data referenced in <embed> element */
+    
+    else if (element.localName == "embed")
+    {
+        if (element.getAttribute("src"))
+        {
+            if (replaceableResourceURL(element.src))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                origurl = element.getAttribute("src");
+                
+                datauri = replaceURL(origurl,baseuri,documenturi);
+                
+                origstr = (datauri == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+            }
+        }
+    }
+    
+    /* SVG - External location referenced in <a> element */
+    /* SVG - Internal location referenced in <a> element */
+    
+    else if (element.localName == "a" && element instanceof SVGElement)
+    {
+        if (element.getAttribute("href") || element.getAttribute("xlink:href"))
+        {
+            baseuri = element.ownerDocument.baseURI;
+            
+            documenturi = element.ownerDocument.documentURI;
+            
+            origurl = element.getAttribute("href") || element.getAttribute("xlink:href");
+            
+            newurl = adjustURL(origurl,baseuri,documenturi);
+            
+            if (newurl != origurl)
+            {
+                origstr = " data-savepage-href=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ (?:href|xlink:href)="[^"]*"/,origstr + " href=\"" + newurl + "\"");
+            }
+        }
+    }
+    
+    /* SVG - External <symbol> element referenced in <use> element */
+    /* SVG - Internal <symbol> element referenced in <use> element */
+    
+    else if (element.localName == "use" && element instanceof SVGElement)
+    {
+        if (element.getAttribute("href") || element.getAttribute("xlink:href"))
+        {
+            baseuri = element.ownerDocument.baseURI;
+            
+            documenturi = element.ownerDocument.documentURI;
+            
+            origurl = element.getAttribute("href") || element.getAttribute("xlink:href");
+            
+            newurl = adjustURL(origurl,baseuri,documenturi);
+            
+            if (newurl.substr(0,1) != "#")  /* not fragment only */
+            {
+                if (replaceableResourceURL(element.href.baseVal))
+                {
+                    svgstr = retrieveContent(origurl,baseuri);
+                    
+                    parser = new DOMParser();
+                    svgdoc = parser.parseFromString(svgstr,"text/html");
+                    
+                    if (element.href.baseVal.indexOf("#") >= 0)  /* SVG 1.1 & SVG 2 - fragment - insert fragment element and descendants */
+                    {
+                        svgfragid = element.href.baseVal.substr(element.href.baseVal.indexOf("#")+1);
+                        svgelement = svgdoc.getElementById(svgfragid);
+                        svghref = (svgelement && svgelement.localName == "symbol") ? "#" + svgfragid : "";
+                    }
+                    else
+                    {
+                        svgelement = svgdoc.body.children[0];  /* SVG 2 - no fragment - insert root <svg> element and descendants */
+                        svghref = "";
+                    }
+                    
+                    if (svgelement)
+                    {
+                        origstr = " data-savepage-href=\"" + origurl + "\"";
+                        
+                        startTag = startTag.replace(/ (?:href|xlink:href)="[^"]*"/,origstr + " href=\"" + svghref + "\"");
+                        
+                        endTag = endTag.replace(/>/,"><!--savepage-symbol-insert-->" + svgelement.outerHTML);
+                    }
+                }
+            }
+            else  /* fragment only */
+            {
+                if (newurl != origurl)
+                {
+                    origstr = " data-savepage-href=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ (?:href|xlink:href)="[^"]*"/,origstr + " href=\"" + newurl + "\"");
+                }
+            }
+        }
+    }
+    
+    /* SVG - External resource referenced in other SVG elements */
+    /* SVG - Internal resource referenced in other SVG elements */
+    
+    else if (hrefSVGElements.indexOf(element.localName) >= 0 && element instanceof SVGElement)
+    {
+        if (element.getAttribute("href") || element.getAttribute("xlink:href"))
+        {
+            baseuri = element.ownerDocument.baseURI;
+            
+            documenturi = element.ownerDocument.documentURI;
+            
+            origurl = element.getAttribute("href") || element.getAttribute("xlink:href");
+            
+            newurl = adjustURL(origurl,baseuri,documenturi);
+            
+            if (newurl.substr(0,1) != "#")  /* not fragment only */
+            {
+                if (replaceableResourceURL(element.href.baseVal))
+                {
+                    datauri = replaceURL(origurl,baseuri,documenturi);
+                    
+                    origstr = (datauri == origurl) ? "" : " data-savepage-href=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ (?:href|xlink:href)="[^"]*"/,origstr + " href=\"" + datauri + "\"");
+                }
+            }
+            else  /* fragment only */
+            {
+                if (newurl != origurl)
+                {
+                    origstr = " data-savepage-href=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ (?:href|xlink:href)="[^"]*"/,origstr + " href=\"" + newurl + "\"");
+                }
+            }
+        }
+    }
+    
+    /* Handle nested frames and child elements & text nodes & comment nodes */
+    /* Generate HTML into array of strings */
+    
+    if (element.localName == "iframe")  /* iframe elements */
+    {
+        if (pageType == 0)
+        {
+            if (depth < maxFrameDepth)
+            {
+                nosrcframe = nosrcframe || (!element.getAttribute("src") && !element.getAttribute("srcdoc"));
+                
+                subframekey = element.getAttribute("data-savepage-key");
+                
+                try
+                {
+                    if (element.contentDocument.documentElement != null)  /* in case web page not fully loaded before extracting */
+                    {
+                        startindex = htmlStrings.length;
+                        
+                        extractHTML(depth+1,element.contentWindow,element.contentDocument.documentElement,crossframe,nosrcframe,subframekey,preserve,indent+2);
+                        
+                        endindex = htmlStrings.length;
+                        
+                        htmltext = "";
+                        
+                        for (j = startindex; j < endindex; j++)
+                        {
+                            htmltext += htmlStrings[j];
+                            htmlStrings[j] = "";
+                        }
+                        
+                        htmltext = htmltext.replace(/&/g,"&amp;");
+                        htmltext = htmltext.replace(/"/g,"&quot;");
+                        
+                        if (pageType == 0 && formatHTML && depth == 0)
+                        {
+                            htmltext = htmltext.replace(/\n/g,newlineIndent(indent+2));
+                            htmltext = newlineIndent(indent+2) + "<!--savepage-srcdoc-begin-->" + newlineIndent(indent+2) + htmltext;
+                            htmltext += newlineIndent(indent+2) + "<!--savepage-srcdoc-end-->";
+                        }
+                        
+                        startTag = startTag.replace(/<iframe/,"<iframe data-savepage-sameorigin=\"\"");
+                        
+                        if (element.hasAttribute("srcdoc"))
+                        {
+                            origsrcdoc = element.getAttribute("srcdoc");
+                            
+                            origstr = " data-savepage-srcdoc=\"" + origsrcdoc + "\"";
+                            
+                            startTag = startTag.replace(/ srcdoc="[^"]*"/,origstr + " srcdoc=\"" + htmltext + "\"");
+                        }
+                        else startTag = startTag.replace(/<iframe/,"<iframe srcdoc=\"" + htmltext + "\"");
+                    }
+                }
+                catch (e)  /* attempting cross-domain web page access */
+                {
+                    if (retainCrossFrames)
+                    {
+                        for (i = 0; i < frameKey.length; i++)
+                        {
+                            if (frameKey[i] == subframekey) break;
+                        }
+                        
+                        if (i != frameKey.length)
+                        {
+                            parser = new DOMParser();
+                            framedoc = parser.parseFromString(frameHTML[i],"text/html");
+                            
+                            startindex = htmlStrings.length;
+                            
+                            extractHTML(depth+1,null,framedoc.documentElement,true,nosrcframe,subframekey,preserve,indent+2);
+                            
+                            endindex = htmlStrings.length;
+                            
+                            htmltext = "";
+                            
+                            for (j = startindex; j < endindex; j++)
+                            {
+                                htmltext += htmlStrings[j];
+                                htmlStrings[j] = "";
+                            }
+                            
+                            htmltext = htmltext.replace(/&/g,"&amp;");
+                            htmltext = htmltext.replace(/"/g,"&quot;");
+                            
+                            if (pageType == 0 && formatHTML && depth == 0)
+                            {
+                                htmltext = htmltext.replace(/\n/g,newlineIndent(indent+2));
+                                htmltext = newlineIndent(indent+2) + "<!--savepage-srcdoc-begin-->" + newlineIndent(indent+2) + htmltext;
+                                htmltext += newlineIndent(indent+2) + "<!--savepage-srcdoc-end-->";
+                            }
+                            
+                            startTag = startTag.replace(/<iframe/,"<iframe data-savepage-crossorigin=\"\"");
+                            
+                            if (element.hasAttribute("srcdoc"))
+                            {
+                                origsrcdoc = element.getAttribute("srcdoc");
+                                
+                                origstr = " data-savepage-srcdoc=\"" + origsrcdoc + "\"";
+                                
+                                startTag = startTag.replace(/ srcdoc="[^"]*"/,origstr + " srcdoc=\"" + htmltext + "\"");
+                            }
+                            else startTag = startTag.replace(/<iframe/,"<iframe srcdoc=\"" + htmltext + "\"");
+                            
+                            if (element.hasAttribute("sandbox"))  /* prevent scripts executing in cross-origin frames */
+                            {
+                                origsandbox = element.getAttribute("sandbox");
+                                
+                                origstr = " data-savepage-sandbox=\"" + origsandbox + "\"";
+                                
+                                startTag = startTag.replace(/ sandbox="[^"]*"/,origstr + " sandbox=\"allow-scripts\"");
+                            }
+                            else startTag = startTag.replace(/<iframe/,"<iframe sandbox=\"allow-scripts\"");
+                        }
+                    }
+                }
+            }
+            
+            if (element.hasAttribute("src"))
+            {
+                origurl = element.getAttribute("src");
+                
+                origstr = " data-savepage-src=\"" + origurl + "\"";
+                
+                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"\"");
+            }
+            
+            if (pageType == 0 && formatHTML && depth == 0 && !inline && parentpreserve == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
+        }
+        
+        htmlStrings[htmlStrings.length] = startTag;
+        htmlStrings[htmlStrings.length] = endTag;
+    }
+    else if (element.localName == "frame")  /* frame elements */
+    {
+        if (pageType == 0)
+        {
+            datauri = null;
+            
+            if (depth < maxFrameDepth)
+            {
+                nosrcframe = nosrcframe || !element.getAttribute("src");
+                
+                subframekey = element.getAttribute("data-savepage-key");
+                
+                try
+                {
+                    if (element.contentDocument.documentElement != null)  /* in case web page not fully loaded before extracting */
+                    {
+                        startindex = htmlStrings.length;
+                        
+                        extractHTML(depth+1,element.contentWindow,element.contentDocument.documentElement,crossframe,nosrcframe,subframekey,preserve,indent+2);
+                        
+                        endindex = htmlStrings.length;
+                        
+                        htmltext = "";
+                        
+                        for (j = startindex; j < endindex; j++)
+                        {
+                            htmltext += htmlStrings[j];
+                            htmlStrings[j] = "";
+                        }
+                        
+                        datauri = "data:text/html;charset=utf-8," + encodeURIComponent(htmltext);
+                        
+                        startTag = startTag.replace(/<frame/,"<frame data-savepage-sameorigin=\"\"");
+                        
+                        if (element.hasAttribute("src"))
+                        {
+                            origurl = element.getAttribute("src");
+                            
+                            origstr = " data-savepage-src=\"" + origurl + "\"";
+                            
+                            startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                        }
+                        else startTag = startTag.replace(/<frame/,"<frame src=\"" + datauri + "\"");
+                    }
+                }
+                catch (e)  /* attempting cross-domain web page access */
+                {
+                    if (retainCrossFrames)
+                    {
+                        for (i = 0; i < frameKey.length; i++)
+                        {
+                            if (frameKey[i] == subframekey) break;
+                        }
+                        
+                        if (i != frameKey.length)
+                        {
+                            parser = new DOMParser();
+                            framedoc = parser.parseFromString(frameHTML[i],"text/html");
+                            
+                            startindex = htmlStrings.length;
+                            
+                            extractHTML(depth+1,null,framedoc.documentElement,true,nosrcframe,subframekey,preserve,indent+2);
+                            
+                            endindex = htmlStrings.length;
+                            
+                            htmltext = "";
+                            
+                            for (j = startindex; j < endindex; j++)
+                            {
+                                htmltext += htmlStrings[j];
+                                htmlStrings[j] = "";
+                            }
+                            
+                            datauri = "data:text/html;charset=utf-8," + encodeURIComponent(htmltext);
+                            
+                            startTag = startTag.replace(/<frame/,"<frame data-savepage-crossorigin=\"\"");
+                            
+                            if (element.hasAttribute("src"))
+                            {
+                                origurl = element.getAttribute("src");
+                                
+                                origstr = " data-savepage-src=\"" + origurl + "\"";
+                                
+                                startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + datauri + "\"");
+                            }
+                            else startTag = startTag.replace(/<frame/,"<frame src=\"" + datauri + "\"");
+                        }
+                    }
+                }
+            }
+            
+            if (datauri == null)
+            {
+                if (element.getAttribute("src"))  /* unsaved url */
+                {
+                    baseuri = element.ownerDocument.baseURI;
+                    
+                    documenturi = element.ownerDocument.documentURI;
+                    
+                    origurl = element.getAttribute("src");
+                    
+                    newurl = unsavedURL(origurl,baseuri,documenturi);
+                    
+                    origstr = (newurl == origurl) ? "" : " data-savepage-src=\"" + origurl + "\"";
+                    
+                    startTag = startTag.replace(/ src="[^"]*"/,origstr + " src=\"" + newurl + "\"");
+                }
+            }
+            
+            if (pageType == 0 && formatHTML && depth == 0 && !inline && parentpreserve == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
+        }
+        
+        htmlStrings[htmlStrings.length] = startTag;
+    }
+    else
+    {
+        if (element.localName == "html")
+        {
+            /* Add !DOCTYPE declaration */
+            
+            doctype = element.ownerDocument.doctype;
+            
+            if (doctype != null)
+            {
+                htmltext = '<!DOCTYPE ' + doctype.name + (doctype.publicId ? ' PUBLIC "' + doctype.publicId + '"' : '') +
+                           ((doctype.systemId && !doctype.publicId) ? ' SYSTEM' : '') + (doctype.systemId ? ' "' + doctype.systemId + '"' : '') + '>';
+                
+                htmlStrings[htmlStrings.length] = htmltext;
+            }
+            
+            htmlStrings[htmlStrings.length] = startTag;
+        }
+        else if (element.localName == "head")
+        {
+            if (formatHTML && depth == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
+            htmlStrings[htmlStrings.length] = startTag;
+            
+            prefix = (formatHTML && depth == 0) ? "\n    " : "\n";
+
+            /* Add first favicon from document head or if none add favicon from website root */
+            
+            if (depth == 0 && (firstIconLocation != "" || rootIconLocation != ""))
+            {
+                baseuri = element.ownerDocument.baseURI;
+                
+                documenturi = element.ownerDocument.documentURI;
+                
+                location = (firstIconLocation != "") ? firstIconLocation : rootIconLocation;
+                
+                datauri = replaceURL(location,baseuri,documenturi);
+                
+                htmltext = prefix + "<link rel=\"icon\" data-savepage-href=\"" + location + "\" href=\"" + datauri + "\">";
+                
+                htmlStrings[htmlStrings.length] = htmltext;
+            }
+        }
+        else if (startTag != "")
+        {
+            if (pageType == 0 && formatHTML && depth == 0 && !inline && parentpreserve == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
+            htmlStrings[htmlStrings.length] = startTag;
+        }
+        
+        if (element.localName == "style" ||  /* <style> element */
+            element.localName == "script" ||  /* <script> element */
+            (element.localName == "link" && !(element.parentElement instanceof SVGElement) &&  /* <link> is invalid inside <svg> */
+             element.rel.toLowerCase().indexOf("stylesheet") >= 0 && element.getAttribute("href")))  /* <link rel="stylesheet" href="..."> element */
+        {
+            if (formatHTML && depth == 0)
+            {
+                textContent = textContent.trim();
+                if (pageType == 0) textContent = textContent.replace(/\n/g,newlineIndent(indent+2));
+                if (textContent != "") textContent = newlineIndent(indent+2) + textContent;
+                textContent += newlineIndent(indent);
+            }
+            
+            htmlStrings[htmlStrings.length] = textContent;
+        }
+        else if (element.localName == "textarea")  /* <textarea> element */
+        {
+            textContent = textContent.replace(/&/g,"&amp;");
+            textContent = textContent.replace(/</g,"&lt;");
+            textContent = textContent.replace(/>/g,"&gt;");
+            
+            htmlStrings[htmlStrings.length] = textContent;
+        }
+        else if (voidElements.indexOf(element.localName) >= 0) ;  /* void element */
+        else
+        {
+            /* Handle shadow child nodes */
+            
+            if (isFirefox) shadowroot = element.shadowRoot || element.openOrClosedShadowRoot;
+            else shadowroot = element.shadowRoot || ((chrome.dom && element instanceof HTMLElement) ? chrome.dom.openOrClosedShadowRoot(element) : null);
+            
+            if (shadowroot != null)
+            {
+                if (shadowElements.indexOf(element.localName) < 0)  /* ignore elements with built-in Shadow DOM */
+                {
+                    if (pageType == 0 && formatHTML && depth == 0)
+                    {
+                        htmlStrings[htmlStrings.length] = newlineIndent(indent);
+                        indent += 2;
+                    }
+                    
+                    htmlStrings[htmlStrings.length] = "<template data-savepage-shadowroot=\"\">";
+                    
+                    for (i = 0; i < shadowroot.childNodes.length; i++)
+                    {
+                        if (shadowroot.childNodes[i] != null)  /* in case web page not fully loaded before extracting */
+                        {
+                            if (shadowroot.childNodes[i].nodeType == 1)  /* element node */
+                            {
+                                extractHTML(depth,frame,shadowroot.childNodes[i],crossframe,nosrcframe,framekey,preserve,indent+2);
+                            }
+                            else if (shadowroot.childNodes[i].nodeType == 3)  /* text node */
+                            {
+                                text = shadowroot.childNodes[i].textContent;
+                                
+                                if (shadowroot.localName != "noscript")
+                                {
+                                    text = text.replace(/&/g,"&amp;");
+                                    text = text.replace(/</g,"&lt;");
+                                    text = text.replace(/>/g,"&gt;");
+                                }
+                                
+                                if (pageType == 0 && formatHTML && depth == 0)
+                                {
+                                    /* HTML whitespace == HTML space characters == spaces + newlines */
+                                    /* HTML spaces: space (U+0020), tab (U+0009), form feed (U+000C) */
+                                    /* HTML newlines: line feed (U+000A) or carriage return (U+000D) */
+                                    
+                                    if (preserve == 0) text = text.replace(/[\u0020\u0009\u000C\u000A\u000D]+/g," ");
+                                    else if (preserve == 1) text = text.replace(/[\u0020\u0009\u000C]+/g," ");
+                                }
+                                
+                                htmlStrings[htmlStrings.length] = text;
+                            }
+                            else if (shadowroot.childNodes[i].nodeType == 8)  /* comment node */
+                            {
+                                text = shadowroot.childNodes[i].textContent;
+                                
+                                if (pageType == 0 && formatHTML && depth == 0 && !inline && preserve == 0)
+                                {
+                                    text = text.replace(/\n/g,newlineIndent(indent+2));
+                                    
+                                    htmlStrings[htmlStrings.length] = newlineIndent(indent+2);
+                                }
+                                
+                                htmlStrings[htmlStrings.length] = "<!--" + text + "-->";
+                            }
+                        }
+                    }
+                    
+                    if (pageType == 0 && formatHTML && depth == 0)
+                    {
+                        indent -= 2;
+                        htmlStrings[htmlStrings.length] = newlineIndent(indent);
+                    }
+                    
+                    htmlStrings[htmlStrings.length] = "</template>";
+                }
+            }
+            
+            /* Handle normal child nodes */
+            
+            for (i = 0; i < element.childNodes.length; i++)
+            {
+                if (element.childNodes[i] != null)  /* in case web page not fully loaded before extracting */
+                {
+                    if (element.childNodes[i].nodeType == 1)  /* element node */
+                    {
+                        if (depth == 0)
+                        {
+                            if (element.childNodes[i].localName == "iframe" && element.childNodes[i].id.substr(0,8) == "savepage") continue;
+                            if (element.childNodes[i].localName == "script" && element.childNodes[i].id.substr(0,8) == "savepage") continue;
+                            if (element.childNodes[i].localName == "meta" && element.childNodes[i].name.substr(0,8) == "savepage") continue;
+                        }
+                        
+                        /* Handle other element nodes */
+                        
+                        extractHTML(depth,frame,element.childNodes[i],crossframe,nosrcframe,framekey,preserve,indent+2);
+                    }
+                    else if (element.childNodes[i].nodeType == 3)  /* text node */
+                    {
+                        text = element.childNodes[i].textContent;
+                        
+                        /* Skip text nodes before skipped elements/comments and at end of <head>/<body> elements */
+                        
+                        if (pageType > 0 && formatHTML && depth == 0)
+                        {
+                            if (text.trim() == "" && (i+1) < element.childNodes.length && element.childNodes[i+1].nodeType == 1)
+                            {
+                                if (element.childNodes[i+1].localName == "base") continue;
+                                if (element.childNodes[i+1].localName == "iframe" && element.childNodes[i+1].id.substr(0,8) == "savepage") continue;
+                                if (element.childNodes[i+1].localName == "script" && element.childNodes[i+1].id.substr(0,8) == "savepage") continue;
+                                if (element.childNodes[i+1].localName == "meta" && element.childNodes[i+1].name.substr(0,8) == "savepage") continue;
+                            }
+                                
+                            if (text.trim() == "" && (i+1) < element.childNodes.length && element.childNodes[i+1].nodeType == 8)
+                            {
+                                if (element.childNodes[i+1].textContent.indexOf("SAVE PAGE WE") >= 0) continue;
+                            }
+                            
+                            if (text.trim() == "" && i == element.childNodes.length-1)
+                            {
+                                if (element.localName == "head") continue;
+                                if (element.localName == "body") continue;
+                            }
+                        }
+                        
+                        /* Handle other text nodes */
+                        
+                        if (element.localName != "noscript")
+                        {
+                            text = text.replace(/&/g,"&amp;");
+                            text = text.replace(/</g,"&lt;");
+                            text = text.replace(/>/g,"&gt;");
+                        }
+                        
+                        if (pageType == 0 && formatHTML && depth == 0)
+                        {
+                            /* HTML whitespace == HTML space characters == spaces + newlines */
+                            /* HTML spaces: space (U+0020), tab (U+0009), form feed (U+000C) */
+                            /* HTML newlines: line feed (U+000A) or carriage return (U+000D) */
+                            
+                            if (preserve == 0) text = text.replace(/[\u0020\u0009\u000C\u000A\u000D]+/g," ");
+                            else if (preserve == 1) text = text.replace(/[\u0020\u0009\u000C]+/g," ");
+                        }
+                        
+                        htmlStrings[htmlStrings.length] = text;
+                    }
+                    else if (element.childNodes[i].nodeType == 8)  /* comment node */
+                    {
+                        text = element.childNodes[i].textContent;
+                        
+                        /* Skip existing Save Page WE metrics and resource summary comment */
+                        
+                        if (text.indexOf("SAVE PAGE WE") >= 0) continue;
+                        
+                        /* Handle other comment nodes */
+                        
+                        if (pageType == 0 && formatHTML && depth == 0 && !inline && preserve == 0)
+                        {
+                            text = text.replace(/\n/g,newlineIndent(indent+2));
+                            
+                            htmlStrings[htmlStrings.length] = newlineIndent(indent+2);
+                        }
+                        
+                        htmlStrings[htmlStrings.length] = "<!--" + text + "-->";
+                    }
+                }
+            }
+        }
+        
+        if (element.localName == "html" || element.localName == "body")
+        {
+            if (formatHTML && depth == 0) htmlStrings[htmlStrings.length] = newlineIndent(indent);
+            htmlStrings[htmlStrings.length] = endTag;
+        }
+        else if (element.localName == "head")
+        {
+            prefix = (formatHTML && depth == 0) ? "\n    " : "\n";
+            
+            /* Add <style> element containing CSS URL variables */
+            
+            if (pageType == 0 && mergeCSSImages)
+            {
+                htmltext = prefix + "<style id=\"savepage-cssvariables\">";
+                htmltext += prefix + "  :root {";
+                
+                for (i = 0; i < resourceLocation.length; i++)
+                {
+                    if (resourceCSSFrameKeys[i][framekey] == true)
+                    {
+                        try { asciistring = btoa(resourceContent[i]); }
+                        catch (e) { asciistring = ""; }  /* resource content not a binary string */
+                        
+                        htmltext += prefix + "    --savepage-url-" + i + ": url(data:" + resourceMimeType[i] + ";base64," + asciistring + ");";   /* binary data encoded as Base64 ASCII string */
+                    }
+                }
+                
+                htmltext += prefix + "  }";
+                htmltext += prefix + "</style>";
+                
+                htmlStrings[htmlStrings.length] = htmltext;
+            }
+            
+            if (depth == 0)
+            {
+                /* Add shadow loader script */
+                
+                htmltext = prefix + "<script id=\"savepage-shadowloader\" type=\"text/javascript\">";
+                htmltext += prefix + "  \"use strict\";";
+                htmltext += prefix + "  window.addEventListener(\"DOMContentLoaded\",";
+                htmltext += prefix + "  function(event) {";
+                htmltext += prefix + "    savepage_ShadowLoader(" + maxFrameDepth + ");";
+                htmltext += prefix + "  },false);";
+                htmltext += prefix + "  " + shadowLoader;
+                htmltext += prefix + "</script>";
+                
+                htmlStrings[htmlStrings.length] = htmltext;
+                
+                /* Add page info bar html, css and script */
+                
+                if (includeInfoBar)
+                {
+                    date = new Date();
+                    
+                    pageurl = (pageType == 0) ? document.URL : document.querySelector("meta[name='savepage-url']").content;
+                    
+                    pageinfoBar = pageinfoBar.replace(/%URL%/,pageurl);
+                    pageinfoBar = pageinfoBar.replace(/%DECODED-URL%/,decodeURIComponent(pageurl).replace(/'/g,"\\'"));
+                    pageinfoBar = pageinfoBar.replace(/%DATE%/,date.toDateString().substr(8,2) + " " + date.toDateString().substr(4,3) + " " + date.toDateString().substr(11,4));
+                    pageinfoBar = pageinfoBar.replace(/%TIME%/,date.toTimeString().substr(0,8));
+                    
+                    htmltext = prefix + "<script id=\"savepage-pageinfo-bar-insert\" type=\"text/javascript\">";
+                    htmltext += prefix + "  \"use strict\";";
+                    htmltext += prefix + "  window.addEventListener('load',function(event) {";
+                    htmltext += prefix + "    var parser = new DOMParser();";
+                    htmltext += prefix + "    var pageinfodoc = parser.parseFromString('" + pageinfoBar + "','text/html');";
+                    htmltext += prefix + "    var container = document.createElement('div');";
+                    htmltext += prefix + "    container.setAttribute('id','savepage-pageinfo-bar-container');";
+                    htmltext += prefix + "    document.documentElement.appendChild(container);";
+                    htmltext += prefix + "    container.appendChild(pageinfodoc.getElementById('savepage-pageinfo-bar-style'));";
+                    htmltext += prefix + "    container.appendChild(pageinfodoc.getElementById('savepage-pageinfo-bar-content'));";
+                    htmltext += prefix + "    document.getElementById('savepage-pageinfo-bar-button').addEventListener('click',function(event) {";
+                    htmltext += prefix + "      var container = document.getElementById('savepage-pageinfo-bar-container');";
+                    htmltext += prefix + "      document.documentElement.removeChild(container);";
+                    htmltext += prefix + "    },false);";
+                    htmltext += prefix + "  },false);";
+                    htmltext += prefix + "</script>";
+                    
+                    htmlStrings[htmlStrings.length] = htmltext;
+                }
+                
+                /* Add saved page information */
+                
+                date = new Date();
+                datestr = date.toString();
+                
+                if ((pubelement = document.querySelector("meta[property='article:published_time'][content]")) != null) pubstr = pubelement.getAttribute("content");  /* Open Graph - ISO8601 */
+                else if ((pubelement = document.querySelector("meta[property='datePublished'][content]")) != null) pubstr = pubelement.getAttribute("content");  /* Generic RDFa - ISO8601 */
+                else if ((pubelement = document.querySelector("meta[itemprop='datePublished'][content]")) != null) pubstr = pubelement.getAttribute("content");  /* Microdata - ISO8601 */
+                else if ((pubelement = document.querySelector("script[type='application/ld+json']")) != null)  /* JSON-LD - ISO8601 */
+                {
+                    pubmatches = pubelement.textContent.match(/"datePublished"\s*:\s*"([^"]*)"/);
+                    pubstr = pubmatches ? pubmatches[1] : null;
+                }
+                else if ((pubelement = document.querySelector("time[datetime]")) != null) pubstr = pubelement.getAttribute("datetime");  /* HTML5 - ISO8601 and similar formats */
+                else pubstr = null;
+                
+                try 
+                {
+                    if (!pubstr) throw false;
+                    pubmatches = pubstr.match(/(Z|(-|\+)\d\d:?\d\d)$/);
+                    pubzone = pubmatches ? (pubmatches[1] == "Z" ? " GMT+0000" : " GMT" + pubmatches[1].replace(":","")) : "";  /* extract timezone */
+                    pubstr = pubstr.replace(/(Z|(-|\+)\d\d:?\d\d)$/,"");  /* remove timezone */
+                    pubdate = new Date(pubstr);
+                    pubdatestr = pubdate.toString();
+                    pubdatestr = pubdatestr.substr(0,24) + pubzone;
+                }
+                catch (e) { pubdatestr = "Unknown"; }
+                
+                if (savedItems == 0)
+                {
+                    state = "Basic Items;";
+                }
+                else if (savedItems == 1)
+                {
+                    state = "Standard Items;";
+                }
+                else if (savedItems == 2)
+                {
+                    state = "Custom Items;";
+                    if (saveHTMLImagesAll) state += " HTML image files (all);";
+                    if (saveHTMLAudioVideo) state += " HTML audio & video files;";
+                    if (saveHTMLObjectEmbed) state += " HTML object & embed files;";
+                    if (saveCSSImagesAll) state += " CSS image files (all);";
+                    if (saveCSSFontsAll) state += " CSS font files (all);";
+                    else if (saveCSSFontsWoff) state += " CSS font files (woff for any browser);";
+                    if (saveScripts) state += " Scripts (in same-origin frames);";
+                }
+                
+                if (retainCrossFrames) state += " Retain cross-origin frames;";
+                if (mergeCSSImages) state += " Merge CSS images;";
+                if (executeScripts) state += " Allow scripts to execute;";
+                if (removeUnsavedURLs) state += " Remove unsaved URLs;";
+                if (removeElements) state += " Remove hidden elements;";
+                if (rehideElements) state += " Rehide hidden elements;";
+                if (allowPassive) state += " Allow passive mixed content;";
+                if (crossOrigin == 1) state += " Send referrer headers with origin and path;";
+                
+                if (loadLazyContent)
+                {
+                    state += " Load lazy content - ";
+                    if (lazyLoadType == 0) state += "scroll steps = " + lazyLoadScrollTime + "s;";
+                    else if (lazyLoadType == 1) state += "shrink checks = " + lazyLoadShrinkTime + "s;";
+                }
+                
+                if (loadLazyImages) state += " Load lazy images in existing content;";
+                
+                state += " Max frame depth = " + maxFrameDepth + ";";
+                state += " Max resource size = " + maxResourceSize + "MB;";
+                state += " Max resource time = " + maxResourceTime + "s;";
+                
+                pageurl = (pageType == 0) ? document.URL : document.querySelector("meta[name='savepage-url']").content;
+                
+                htmltext = prefix + "<meta name=\"savepage-url\" content=\"" + decodeURIComponent(pageurl) + "\">";
+                htmltext += prefix + "<meta name=\"savepage-title\" content=\"" + document.title + "\">";
+                htmltext += prefix + "<meta name=\"savepage-pubdate\" content=\"" + pubdatestr + "\">";
+                htmltext += prefix + "<meta name=\"savepage-from\" content=\"" + decodeURIComponent(document.URL) + "\">";
+                htmltext += prefix + "<meta name=\"savepage-date\" content=\"" + datestr + "\">";
+                htmltext += prefix + "<meta name=\"savepage-state\" content=\"" + state + "\">";
+                htmltext += prefix + "<meta name=\"savepage-version\" content=\"" + chrome.runtime.getManifest().version + "\">";
+                htmltext += prefix + "<meta name=\"savepage-comments\" content=\"" + enteredComments + "\">";
+                    
+                htmlStrings[htmlStrings.length] = htmltext;
+            }
+            
+            htmlStrings[htmlStrings.length] = newlineIndent(indent);
+            htmlStrings[htmlStrings.length] = endTag;
+        }
+        else if (endTag != "")
+        {
+            if (pageType == 0 && formatHTML && depth == 0 && !inline && preserve == 0 && element.children.length > 0)
+            {
+                htmlStrings[htmlStrings.length] = newlineIndent(indent);
+            }
+            
+            htmlStrings[htmlStrings.length] = endTag;
+        }
+    }
+}
+
+function replaceCSSURLsInStyleSheet(csstext,baseuri,documenturi,importstack,framekey)
+{
+    var regex;
+    var matches = [];
+    
+    /* @import url() or */
+    /* @font-face rule with font url()'s or */
+    /* image url() or */
+    /* avoid matches inside double-quote strings or */
+    /* avoid matches inside single-quote strings or */
+    /* avoid matches inside comments */
+    
+    regex = new RegExp(/(?:( ?)@import\s*(?:url\(\s*)?((?:"[^"]+")|(?:'[^']+')|(?:[^\s);]+))(?:\s*\))?\s*;)|/.source +  /* p1 & p2 */
+                       /(?:( ?)@font-face\s*({[^}]*}))|/.source +  /* p3 & p4 */
+                       /(?:( ?)url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\))|/.source +  /* p5 & p6 */
+                       /(?:"(?:\\"|[^"])*")|/.source +
+                       /(?:'(?:\\'|[^'])*')|/.source +
+                       /(?:\/\*(?:\*[^\/]|[^\*])*?\*\/)/.source,
+                       "gi");
+    
+    csstext = csstext.replace(regex,_replaceCSSURLOrImportStyleSheet);
+    
+    return csstext;
+    
+    function _replaceCSSURLOrImportStyleSheet(match,p1,p2,p3,p4,p5,p6,offset,string)
+    {
+        var i,location,csstext,newurl,datauriorcssvar,origstr,urlorvar;
+        
+        if (match.trim().substr(0,7).toLowerCase() == "@import")  /* @import url() */
+        {
+            p2 = removeQuotes(p2);
+            
+            if (replaceableResourceURL(p2))
+            {
+                if (baseuri != null)
+                {
+                    location = resolveURL(p2,baseuri);
+                    
+                    if (location != null)
+                    {
+                        location = removeFragment(location);
+                        
+                        for (i = 0; i < resourceLocation.length; i++)
+                            if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
+                        
+                        if (i < resourceLocation.length)  /* style sheet found */
+                        {
+                            if (importstack.indexOf(location) < 0)
+                            {
+                                importstack.push(location);
+                                
+                                csstext = replaceCSSURLsInStyleSheet(resourceContent[i],resourceLocation[i],resourceLocation[i],importstack,framekey);
+                                
+                                importstack.pop();
+                                
+                                return p1 + "/*savepage-import-url=" + p2 + "*/" + p1 + csstext;
+                            }
+                        }
+                    }
+                }
+                
+                if (removeUnsavedURLs) return p1 + "/*savepage-import-url=" + p2 + "*/" + p1;
+                else
+                {
+                    newurl = adjustURL(p2,baseuri,documenturi);
+                    
+                    if (newurl != p2)
+                    {
+                        match = match.replace(p2,newurl);
+                        match = match.replace(/(@import)/i,"/*savepage-import-url=" + p2 + "*/" + p1 + "$1");
+                        return match;
+                    }
+                    else return match;  /* original @import rule */
+                }
+            }
+        }
+        else if (match.trim().substr(0,10).toLowerCase() == "@font-face")  /* @font-face rule */
+        {
+            match = match.replace(/font-display\s*:\s*([^\s;}]*)\s*;?/gi,"/*savepage-font-display=$1*/");  /* remove font-display to avoid Chrome using fallback font */
+            
+            regex = /( ?)url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\)/gi;  /* font url() */
+            
+            return match.replace(regex,_replaceURL);
+            
+            function _replaceURL(match,p1,p2,offset,string)
+            {
+                var cssvar,datauri,origstr;
+                
+                p2 = removeQuotes(p2);
+                
+                if (replaceableResourceURL(p2))
+                {
+                    datauri = replaceURL(p2,baseuri,documenturi);
+                    
+                    origstr = (datauri == p2) ? p1 : p1 + "/*savepage-url=" + p2 + "*/" + p1;
+                    
+                    return origstr + "url(" + datauri + ")";
+                }
+                else return match;  /* unreplaceable - original font url() */ 
+            }
+        }
+        else if (match.trim().substr(0,4).toLowerCase() == "url(")  /* image url() */
+        {
+            p6 = removeQuotes(p6);
+            
+            if (replaceableResourceURL(p6))
+            {
+                datauriorcssvar = replaceCSSImageURL(p6,baseuri,documenturi,framekey);
+                
+                origstr = (datauriorcssvar == p6) ? p5 : p5 + "/*savepage-url=" + p6 + "*/" + p5;
+                
+                urlorvar = (datauriorcssvar.substr(0,2) == "--") ? "var" : "url";
+                
+                return origstr + urlorvar + "(" + datauriorcssvar + ")";
+            }
+            else return match;  /* unreplaceable - original image url() */ 
+        }
+        else if (match.substr(0,1) == "\"") return match;  /* double-quote string */
+        else if (match.substr(0,1) == "'") return match;  /* single-quote string */
+        else if (match.substr(0,2) == "/*") return match;  /* comment */
+    }
+}
+
+function replaceCSSImageURLs(csstext,baseuri,documenturi,framekey)
+{
+    var regex;
+    
+    regex = /( ?)url\(\s*((?:"[^"]+")|(?:'[^']+')|(?:[^\s)]+))\s*\)/gi;  /* image url() */
+    
+    csstext = csstext.replace(regex,_replaceCSSImageURL);
+    
+    return csstext;
+    
+    function _replaceCSSImageURL(match,p1,p2,offset,string)
+    {
+        var datauriorcssvar,origstr,urlorvar;
+        
+        p2 = removeQuotes(p2);
+        
+        if (replaceableResourceURL(p2))
+        {
+            datauriorcssvar = replaceCSSImageURL(p2,baseuri,documenturi,framekey);
+            
+            origstr = (datauriorcssvar == p2) ? p1 : p1 + "/*savepage-url=" + p2 + "*/" + p1;
+            
+            urlorvar = (datauriorcssvar.substr(0,2) == "--") ? "var" : "url";
+            
+            return origstr + urlorvar + "(" + datauriorcssvar + ")";
+        }
+        else return match;  /* unreplaceable - original image url() */
+    }
+}
+
+function replaceCSSImageURL(url,baseuri,documenturi,framekey)
+{
+    var i,location,count,asciistring;
+    
+    if (pageType > 0) return url;  /* saved page - ignore new resources when re-saving */
+    
+    if (baseuri != null)
+    {
+        url = url.replace(/\\26 ?/g,"&");  /* remove CSS escape */
+        url = url.replace(/\\3[Aa] ?/g,":");  /* remove CSS escape */
+        url = url.replace(/\\3[Dd] ?/g,"=");  /* remove CSS escape */
+        
+        location = resolveURL(url,baseuri);
+        
+        if (location != null)
+        {
+            location = removeFragment(location);
+            
+            for (i = 0; i < resourceLocation.length; i++)
+                if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
+            
+            if (i < resourceLocation.length)
+            {
+                if (resourceCharSet[i] == "")  /* charset not defined - binary data */
+                {
+                    count = mergeCSSImages ? resourceRemembered[i]-resourceCSSRemembered[i]+Object.keys(resourceCSSFrameKeys[i]).length : resourceRemembered[i];
+                    
+                    if (resourceContent[i].length*count <= maxResourceSize*1024*1024)  /* skip large and/or repeated resource */
+                    {
+                        if (mergeCSSImages)
+                        {
+                            if (resourceCSSFrameKeys[i][framekey] == true)
+                            {
+                                resourceReplaced[i]++;
+                                
+                                return "--savepage-url-" + i;
+                            }
+                        }
+                        else
+                        {
+                            resourceReplaced[i]++;
+                            
+                            try { asciistring = btoa(resourceContent[i]); }
+                            catch (e) { asciistring = ""; }  /* resource content not a binary string */
+                            
+                            return "data:" + resourceMimeType[i] + ";base64," + asciistring;  /* binary data encoded as Base64 ASCII string */
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return unsavedURL(url,baseuri,documenturi);  /* unsaved url */
+}
+
+function replaceURL(url,baseuri,documenturi)
+{
+    var i,location,fragment,count,asciistring;
+    
+    if (pageType > 0) return url;  /* saved page - ignore new resources when re-saving */
+    
+    if (baseuri != null)
+    {
+        location = resolveURL(url,baseuri);
+        
+        if (location != null)
+        {
+            i = location.indexOf("#");
+            
+            fragment = (i >= 0) ? location.substr(i) : "";
+            
+            location = removeFragment(location);
+            
+            for (i = 0; i < resourceLocation.length; i++)
+                if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
+            
+            if (i < resourceLocation.length)
+            {
+                if (resourceCharSet[i] == "")  /* charset not defined - binary data */
+                {
+                    count = resourceRemembered[i];
+                    
+                    if (resourceContent[i].length*count <= maxResourceSize*1024*1024)  /* skip large and/or repeated resource */
+                    {
+                        resourceReplaced[i]++;
+                        
+                        try { asciistring = btoa(resourceContent[i]); }
+                        catch (e) { asciistring = ""; }  /* resource content not a binary string */
+                        
+                        return "data:" + resourceMimeType[i] + ";base64," + asciistring  + fragment;  /* binary data encoded as Base64 ASCII string */
+                    }
+                }
+                else  /* charset defined - character data */
+                {
+                    resourceReplaced[i]++;
+                    
+                    return "data:" + resourceMimeType[i] + ";charset=utf-8," + encodeURIComponent(resourceContent[i]) + fragment;  /* characters encoded as UTF-8 %escaped string */
+                }
+            }
+        }
+    }
+    
+    return unsavedURL(url,baseuri,documenturi);  /* unsaved url */
+}
+
+function retrieveContent(url,baseuri)
+{
+    var i,location;
+    
+    if (pageType > 0) return "";  /* saved page - ignore new resources when re-saving */
+    
+    if (baseuri != null)
+    {
+        location = resolveURL(url,baseuri);
+        
+        if (location != null)
+        {
+            location = removeFragment(location);
+            
+            for (i = 0; i < resourceLocation.length; i++)
+                if (resourceLocation[i] == location && resourceStatus[i] == "success") break;
+            
+            if (i < resourceLocation.length)
+            {
+                if (resourceCharSet[i] != "")  /* charset defined - character data */
+                {
+                    resourceReplaced[i]++;
+                    
+                    return resourceContent[i];
+                }
+            }
+        }
+    }
+    
+    return "";  /* empty string */
+}
+
+function adjustURL(url,baseuri,documenturi)
+{
+    var i,location;
+    
+    if (baseuri != null)
+    {
+        location = resolveURL(url,baseuri);
+        
+        if (location != null)
+        {
+            i = location.indexOf("#");
+            
+            if (i < 0)  /* without fragment */
+            {
+                return location;  /* same or different page - make absolute */
+            }
+            else  /* with fragment */
+            {
+                if (location.substr(0,i) == documenturi) return location.substr(i);  /* same page - make fragment only */
+                else return location;  /* different page - make absolute */
+            }
+        }
+    }
+    
+    return url;
+}
+
+function unsavedURL(url,baseuri,documenturi)
+{
+    if (removeUnsavedURLs) return "";  /* empty string */
+    else return adjustURL(url,baseuri,documenturi);  /* original or adjusted url */
+}
+
+function createCanvasDataURL(url,baseuri,documenturi,element)
+{
+    var canvas,context;
+    
+    canvas = document.createElement("canvas");
+    canvas.width = element.clientWidth;
+    canvas.height = element.clientHeight;
+    
+    try
+    {
+        context = canvas.getContext("2d");
+        context.drawImage(element,0,0,canvas.width,canvas.height);
+        return canvas.toDataURL("image/png","");
+    }
+    catch (e) {}
+    
+    return unsavedURL(url,baseuri,documenturi);  /* unsaved url */
+}
+
+function swapScreenAndPrintDevices(csstext)
+{
+    var regex;
+    
+    regex = /@media[^{]*{/gi;  /* @media rule */
+        
+    csstext = csstext.replace(regex,_replaceDevice);
+    
+    return csstext;
+    
+    function _replaceDevice(match,offset,string)
+    {
+        match = match.replace(/screen/gi,"######");
+        match = match.replace(/print/gi,"screen");
+        match = match.replace(/######/gi,"print");
+        
+        return match;
+    }
+}
+
 function newlineIndent(indent)
 {
     var i,str;
@@ -3363,205 +5033,118 @@ function newlineIndent(indent)
     return str;
 }
 
-function getSavedFileName(url,title,extract)
-{
-    var i,documentURL,host,lastsegment,file,extension,path,datestr,filename;
-    var pathsegments = new Array();
-    var date = new Date();
-    
-    documentURL = new URL(url);
-    
-    host = documentURL.hostname;
-    host = decodeURIComponent(host);
-    host = sanitizeString(host);
-    
-    pathsegments = documentURL.pathname.split("/");
-    lastsegment = pathsegments.pop();
-    if (lastsegment == "") lastsegment = pathsegments.pop();
-    lastsegment = decodeURIComponent(lastsegment);
-    lastsegment = sanitizeString(lastsegment);
-    
-    i = lastsegment.lastIndexOf(".");
-    
-    if (i < 0)
-    {
-        file = lastsegment;
-        extension = "";
-    }
-    else
-    {
-        file = lastsegment.substring(0,i);
-        extension = lastsegment.substring(i);
-    }
-    
-    if (!extract) extension = ".html";
-    
-    pathsegments.shift();
-    pathsegments.push(file);
-    path = pathsegments.join("/");
-    path = decodeURIComponent(path);
-    path = sanitizeString(path);
-    
-    title = sanitizeString(title);
-    title = title.trim();
-    
-    if (title == "") title = file;
-    
-    datestr = new Date(date.getTime()-(date.getTimezoneOffset()*60000)).toISOString();
-    
-    filename = savedFileName;
-    
-    filename = filename.replace(/%TITLE%/g,title);
-    filename = filename.replace(/%DATE%/g,datestr.substr(0,10));
-    filename = filename.replace(/%TIME%/g,datestr.substr(11,8).replace(/:/g,"-"));
-    filename = filename.replace(/%HOST%/g,host);
-    filename = filename.replace(/%PATH%/g,path);
-    filename = filename.replace(/%FILE%/g,file);
-    
-    filename = filename.replace(/(\\|\/|:|\*|\?|"|<|>|\|)/g,"_");
-    
-    if (replaceSpaces) filename = filename.replace(/\s/g,replaceChar);
-    
-    filename = filename + extension;
-    
-    return filename;
-}
-
-function sanitizeString(string)
-{
-    var i,charcode;
-    
-    /* Remove control characters: 0-31 and 255 */ 
-    /* Remove other line break characters: 133, 8232, 8233 */ 
-    /* Remove zero-width characters: 6158, 8203, 8204, 8205, 8288, 65279 */ 
-    /* Change all space characters to normal spaces: 160, 5760, 8192-8202, 8239, 8287, 12288 */
-    /* Change all hyphen characters to normal hyphens: 173, 1470, 6150, 8208-8213, 8315, 8331, 8722, 11834, 11835, 65112, 65123, 65293 */
-    
-    for (i = 0; i < string.length; i++)
-    {
-        charcode = string.charCodeAt(i);
-        
-        if (charcode <= 31 || charcode == 255 ||
-            charcode == 133 || charcode == 8232 || charcode == 8233 ||
-            charcode == 6158 || charcode == 8203 || charcode == 8204 || charcode == 8205 || charcode == 8288 || charcode == 65279)
-        {
-            string = string.substr(0,i) + string.substr(i+1);
-        }
-        
-        if (charcode == 160 || charcode == 5760 || (charcode >= 8192 && charcode <= 8202) || charcode == 8239 || charcode == 8287 || charcode == 12288)
-        {
-            string = string.substr(0,i) + " " + string.substr(i+1);
-        }
-        
-        if (charcode == 173 || charcode == 1470 || charcode == 6150 || (charcode >= 8208 && charcode <= 8213) ||
-            charcode == 8315 || charcode == 8331 || charcode == 8722 || charcode == 11834 || charcode == 11835 ||
-            charcode == 65112 || charcode == 65123 || charcode == 65293)
-        {
-            string = string.substr(0,i) + "-" + string.substr(i+1);
-        }
-    }
-    
-    return string;
-}
-
 /************************************************************************/
 
 /* View saved page information function */
 
 function viewSavedPageInfo()
 {
-    var i,xhr,parser,pageinfodoc,container,metaurl,metatitle,metadate,metastate,metaversion,metacomments;
+    var parser,pageinfodoc,container,metaurl,metatitle,metapubdate,metafrom,metadate,metastate,metaversion,metacomments;
     
-    /* Load page info panel */
+    /* Parse page info document */
     
-    xhr = new XMLHttpRequest();
-    xhr.open("GET",chrome.runtime.getURL("pageinfo-panel.html"),true);
-    xhr.onload = complete;
-    xhr.send();
+    parser = new DOMParser();
+    pageinfodoc = parser.parseFromString(pageinfoPanel,"text/html");
     
-    function complete()
+    /* Create container element */
+    
+    container = document.createElement("div");
+    container.setAttribute("id","savepage-pageinfo-panel-container");
+    document.documentElement.appendChild(container);
+    
+    /* Append page info elements */
+    
+    container.appendChild(pageinfodoc.getElementById("savepage-pageinfo-panel-overlay"));
+    
+    /* Add listeners for buttons */
+    
+    document.getElementById("savepage-pageinfo-panel-open").addEventListener("click",clickOpenURL,false);
+    document.getElementById("savepage-pageinfo-panel-okay").addEventListener("click",clickOkay,false);
+    
+    /* Focus okay button */
+    
+    document.getElementById("savepage-pageinfo-panel-okay").focus();
+    
+    /* Populate page info contents */
+    
+    metaurl = document.querySelector("meta[name='savepage-url']").content;
+    metatitle = document.querySelector("meta[name='savepage-title']").content;
+    metapubdate = document.querySelector("meta[name='savepage-pubdate']").content;
+    metafrom = document.querySelector("meta[name='savepage-from']").content;
+    metadate = document.querySelector("meta[name='savepage-date']").content;
+    metastate = document.querySelector("meta[name='savepage-state']").content;
+    metaversion = document.querySelector("meta[name='savepage-version']").content;
+    metacomments = "";
+    
+    if (metaversion > +"8.0") metacomments = document.querySelector("meta[name='savepage-comments']").content;  /* decodes HTML entities */
+    
+    if (metaversion < +"6.0") metastate = metastate.replace(/(.*) (Max frame depth = \d+; Max resource size = \d+MB;) (.*)/,"$1 $3 $2");
+    if (metaversion < +"7.0") metastate = metastate.replace(/CSS fonts used;/,"\n - " + "$&");
+    
+    metastate = metastate.replace(/; /g,";\n");
+    metastate = metastate.replace(/;/g,"");
+    metastate = metastate.replace(/Custom Items/,"$&:");
+    metastate = metastate.replace(/HTML image files \(all\)/," - " + "$&");
+    metastate = metastate.replace(/HTML audio & video files/," - " + "$&");
+    metastate = metastate.replace(/HTML object & embed files/," - " + "$&");
+    metastate = metastate.replace(/CSS image files \(all\)/," - " + "$&");
+    metastate = metastate.replace(/CSS font files \(all\)/," - " + "$&");
+    metastate = metastate.replace(/CSS font files \(woff for any browser\)/," - " + "$&");
+    metastate = metastate.replace(/Scripts \(in same-origin frames\)/," - " + "$&");
+    
+    if (document.querySelector("script[id='savepage-pageloader']") == null &&  /* Version 7.0-14.0 */
+        document.querySelector("meta[name='savepage-resourceloader']") == null)  /* Version 15.0-15.1 */
     {
-        if (xhr.status == 200)
-        {
-            /* Parse page info document */
-            
-            parser = new DOMParser();
-            pageinfodoc = parser.parseFromString(xhr.responseText,"text/html");
-            
-            /* Create container element */
-            
-            container = document.createElement("div");
-            container.setAttribute("id","savepage-pageinfo-panel-container");
-            document.documentElement.appendChild(container);
-            
-            /* Append page info elements */
-            
-            container.appendChild(pageinfodoc.getElementById("savepage-pageinfo-panel-style"));
-            container.appendChild(pageinfodoc.getElementById("savepage-pageinfo-panel-overlay"));
-            
-            /* Add listeners for buttons */
-            
-            document.getElementById("savepage-pageinfo-panel-open").addEventListener("click",clickOpenURL,false);
-            document.getElementById("savepage-pageinfo-panel-okay").addEventListener("click",clickOkay,false);
-            
-            /* Populate page info contents */
-            
-            metaurl = document.querySelector("meta[name='savepage-url']").content;
-            metatitle = document.querySelector("meta[name='savepage-title']").content;
-            metadate = document.querySelector("meta[name='savepage-date']").content;
-            metastate = document.querySelector("meta[name='savepage-state']").content;
-            metaversion = document.querySelector("meta[name='savepage-version']").content;
-            metacomments = "";
-            
-            if (metaversion > +"8.0") metacomments = document.querySelector("meta[name='savepage-comments']").content;  /* decodes HTML entities */
-            
-            if (metaversion < +"6.0") metastate = metastate.replace(/(.*) (Max frame depth = \d+; Max resource size = \d+MB;) (.*)/,"$1 $3 $2");
-            if (metaversion < +"7.0") metastate = metastate.replace(/CSS fonts used;/,"\n - " + "$&");
-            
-            metastate = metastate.replace(/; /g,";\n");
-            metastate = metastate.replace(/;/g,"");
-            metastate = metastate.replace(/Chosen Items/,"$&:");
-            metastate = metastate.replace(/HTML image files \(all\)/," - " + "$&");
-            metastate = metastate.replace(/HTML audio & video files/," - " + "$&");
-            metastate = metastate.replace(/HTML object & embed files/," - " + "$&");
-            metastate = metastate.replace(/CSS image files \(all\)/," - " + "$&");
-            metastate = metastate.replace(/CSS font files \(woff for any browser\)/," - " + "$&");
-            metastate = metastate.replace(/Scripts \(in same-origin frames\)/," - " + "$&");
-            
-            metaversion = "Save Page WE " + metaversion;
-            
-            document.getElementById("savepage-pageinfo-panel-url").textContent = metaurl;
-            document.getElementById("savepage-pageinfo-panel-title").textContent = metatitle;
-            document.getElementById("savepage-pageinfo-panel-date").textContent = metadate;
-            document.getElementById("savepage-pageinfo-panel-state").textContent = metastate;
-            document.getElementById("savepage-pageinfo-panel-version").textContent = metaversion;
-            document.getElementById("savepage-pageinfo-panel-comments").children[0].value = metacomments;
-        }
+        metastate = metastate.replace(/Used page loader/,"$&" + " (Removed)");
+        metastate = metastate.replace(/Used resource loader/,"$&" + " (Removed)");
     }
+    
+    metaversion = "Save Page WE " + metaversion;
+    
+    document.getElementById("savepage-pageinfo-panel-url").textContent = metaurl;
+    document.getElementById("savepage-pageinfo-panel-title").textContent = metatitle;
+    document.getElementById("savepage-pageinfo-panel-pubdate").textContent = metapubdate;
+    document.getElementById("savepage-pageinfo-panel-from").textContent = metafrom;
+    document.getElementById("savepage-pageinfo-panel-date").textContent = metadate;
+    document.getElementById("savepage-pageinfo-panel-state").textContent = metastate;
+    document.getElementById("savepage-pageinfo-panel-version").textContent = metaversion;
+    document.getElementById("savepage-pageinfo-panel-comments").children[0].value = metacomments;
     
     function clickOpenURL()
     {
         window.open(metaurl);
+        
+        document.documentElement.removeChild(document.getElementById("savepage-pageinfo-panel-container"));
+        
+        saveState = -1;
+        
+        window.setTimeout(function() { chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState }); },1000);
     }
     
     function clickOkay()
     {
         document.documentElement.removeChild(document.getElementById("savepage-pageinfo-panel-container"));
+        
+        saveState = -1;
+        
+        window.setTimeout(function() { chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState }); },1000);
     }
 }
 
 /************************************************************************/
 
-/* Remove Page Loader function */
+/* Remove Resource Loader function */
 
-function removePageLoader()
+/* For pages saved using Version 7.0-15.1 */
+
+function removeResourceLoader()
 {
-    var resourceBlobURL = new Array();
-    var resourceMimeType = new Array();
-    var resourceCharSet = new Array();
-    var resourceContent = new Array();
-    var resourceStatus = new Array();
-    var resourceRemembered = new Array();
+    var resourceBlobURL = [];
+    var resourceMimeType = [];
+    var resourceCharSet = [];
+    var resourceContent = [];
+    var resourceStatus = [];
+    var resourceRemembered = [];
     
     var resourceCount;
     
@@ -3571,7 +5154,9 @@ function removePageLoader()
     
     function gatherBlobResources()
     {
-        chrome.runtime.sendMessage({ type: "setSaveBadge", text: "REM", color: "#FF8000" });
+        saveState = 4;
+        
+        chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
         
         findBlobResources(0,window,document.documentElement);
         
@@ -3580,8 +5165,8 @@ function removePageLoader()
     
     function findBlobResources(depth,frame,element)
     {
-        var i,csstext,regex;
-        var matches = new Array();
+        var i,csstext,regex,shadowroot;
+        var matches = [];
         
         if (element.hasAttribute("style"))
         {
@@ -3649,8 +5234,11 @@ function removePageLoader()
         {
             if (element.src.substr(0,5).toLowerCase() == "blob:")
             {
-                if (element.parentElement.localName == "audio") rememberBlobURL(element.src,"audio/mpeg","");
-                else if (element.parentElement.localName == "video") rememberBlobURL(element.src,"video/mp4","");
+                if (element.parentElement)
+                {
+                    if (element.parentElement.localName == "audio") rememberBlobURL(element.src,"audio/mpeg","");
+                    else if (element.parentElement.localName == "video") rememberBlobURL(element.src,"video/mp4","");
+                }
             }
         }
         else if (element.localName == "track")
@@ -3686,6 +5274,23 @@ function removePageLoader()
         }
         else
         {
+            /* Handle shadow child elements */
+            
+            if (isFirefox) shadowroot = element.shadowRoot || element.openOrClosedShadowRoot;
+            else shadowroot = element.shadowRoot || ((chrome.dom && element instanceof HTMLElement) ? chrome.dom.openOrClosedShadowRoot(element) : null);
+            
+            if (shadowroot != null)
+            {
+                if (shadowElements.indexOf(element.localName) < 0)  /* ignore elements with built-in Shadow DOM */
+                {
+                    for (i = 0; i < shadowroot.children.length; i++)
+                        if (shadowroot.children[i] != null)  /* in case web page not fully loaded before finding */
+                            findBlobResources(depth,frame,shadowroot.children[i]);
+                }
+            }
+            
+            /* Handle normal child elements */
+            
             for (i = 0; i < element.children.length; i++)
                 if (element.children[i] != null)  /* in case web page not fully loaded before finding */
                     findBlobResources(depth,frame,element.children[i]);
@@ -3730,7 +5335,6 @@ function removePageLoader()
                     xhr = new XMLHttpRequest();
                     
                     xhr.open("GET",resourceBlobURL[i],true);
-                    xhr.setRequestHeader("Cache-Control","no-store");
                     xhr.responseType = "arraybuffer";
                     xhr.timeout = 1000;
                     xhr.onload = loadSuccess;
@@ -3740,7 +5344,7 @@ function removePageLoader()
                     
                     xhr.send();  /* throws exception if url is invalid */
                 }
-                catch(e)
+                catch (e)
                 {
                     resourceStatus[i] = "failure";
                     
@@ -3756,7 +5360,7 @@ function removePageLoader()
     {
         var i,binaryString,contenttype,mimetype,charset;
         var byteArray = new Uint8Array(this.response);
-        var matches = new Array();
+        var matches = [];
         
         if (this.status == 200)
         {
@@ -3830,21 +5434,23 @@ function removePageLoader()
             {
                 count = resourceRemembered[i];
                 
-                if (resourceContent[i].length*count*(4/3) > maxResourceSize*1024*1024) skipcount++;  /* skip large and/or repeated resource */  /* base64 expands by 4/3 */
+                if (resourceContent[i].length*count > maxResourceSize*1024*1024) skipcount++;  /* skip large and/or repeated resource */
                 else dataurisize += resourceContent[i].length*count*(4/3);  /* base64 expands by 4/3 */
             }
         }
         
         if (dataurisize > maxTotalSize*1024*1024)
         {
-            showMessage("Cannot remove page loader","Remove",
-                        "Cannot remove page loader because the total size of resources exceeds " + maxTotalSize + "MB.\n\n" +
-                        "It may be possible to remove page loader by trying this suggestion:\n\n" +
+            showMessage("Cannot remove resource loader","Remove",
+                        "Cannot remove resource loader because the total size of resources exceeds " + maxTotalSize + "MB.\n\n" +
+                        "It may be possible to remove resource loader by trying this suggestion:\n\n" +
                         "    •  Reduce the 'Maximum size allowed for a resource' option value.",
                         null,
                         function savecancel()
                         {
-                            chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
+                            saveState = -1;
+                            
+                            chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
                         });
         }
         else if (showWarning)
@@ -3861,7 +5467,9 @@ function removePageLoader()
                             },
                             function removecancel()
                             {
-                                chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
+                                saveState = -1;
+                                
+                                chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
                             });
             }
             else substituteBlobResources();
@@ -3869,34 +5477,44 @@ function removePageLoader()
         else substituteBlobResources();
     }
     
-    /* Second Pass - to substitute blob URL's with data URI's */
+    /* Second Pass - to substitute blob URLs with data URI's */
     
     function substituteBlobResources()
     {
-        var i,script;
+        var i,script,meta;
         
-        /* Remove page loader script */
+        /* Remove page loader script */  /* Version 7.0-14.0 */
         
         script = document.getElementById("savepage-pageloader");
-        script.parentElement.removeChild(script);
+        if (script != null) script.parentElement.removeChild(script);
+        
+        /* Remove resource loader meta element */  /* Version 15.0+ */
+        
+        meta = document.getElementsByName("savepage-resourceloader")[0];
+        if (meta != null) meta.parentElement.removeChild(meta);
         
         /* Release blob memory allocation */
         
         for (i = 0; i < resourceBlobURL.length; i++) 
             window.URL.revokeObjectURL(resourceBlobURL[i]);
         
-        /* Replace blob URL's with data URI's */
+        /* Replace blob URLs with data URI's */
         
-        replaceBlobResources(0,window,document.documentElement);  /* replace blob url's with data uri's */
+        replaceBlobResources(0,window,document.documentElement);  /* replace blob urls with data uri's */
         
-        savedPageLoader = false;
-        
-        chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
+        window.setTimeout(function()
+        {
+            pageType = 1;  /* saved page */
+            
+            saveState = 7;
+            
+            chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
+        },1000);
     }
     
     function replaceBlobResources(depth,frame,element)
     {
-        var i,csstext,regex;
+        var i,csstext,regex,shadowroot;
         
         if (element.hasAttribute("style"))
         {
@@ -3957,7 +5575,7 @@ function removePageLoader()
             if (element.src.substr(0,5).toLowerCase() == "blob:")
             {
                 element.src = replaceBlobURL(element.src);
-                element.parentElement.load();
+                if (element.parentElement) element.parentElement.load();
             }
         }
         else if (element.localName == "track")
@@ -3993,6 +5611,23 @@ function removePageLoader()
         }
         else
         {
+            /* Handle shadow child elements */
+            
+            if (isFirefox) shadowroot = element.shadowRoot || element.openOrClosedShadowRoot;
+            else shadowroot = element.shadowRoot || ((chrome.dom && element instanceof HTMLElement) ? chrome.dom.openOrClosedShadowRoot(element) : null);
+            
+            if (shadowroot != null)
+            {
+                if (shadowElements.indexOf(element.localName) < 0)  /* ignore elements with built-in Shadow DOM */
+                {
+                    for (i = 0; i < shadowroot.children.length; i++)
+                        if (shadowroot.children[i] != null)  /* in case web page not fully loaded before replacing */
+                            replaceBlobResources(depth,frame,shadowroot.children[i]);
+                }
+            }
+            
+            /* Handle normal child elements */
+            
             for (i = 0; i < element.children.length; i++)
                 if (element.children[i] != null)  /* in case web page not fully loaded before replacing */
                     replaceBlobResources(depth,frame,element.children[i]);
@@ -4012,7 +5647,7 @@ function removePageLoader()
     
     function replaceBlobURL(bloburl)
     {
-        var i,count;
+        var i,count,asciistring;
         
         for (i = 0; i < resourceBlobURL.length; i++)
             if (resourceBlobURL[i] == bloburl && resourceStatus[i] == "success") break;
@@ -4023,9 +5658,13 @@ function removePageLoader()
             {
                 count = resourceRemembered[i];
                 
-                if (resourceContent[i].length*count*(4/3) > maxResourceSize*1024*1024) return bloburl;  /* skip large and/or repeated resource */  /* base64 expands by 4/3 */
-                
-                return "data:" + resourceMimeType[i] + ";base64," + btoa(resourceContent[i]);  /* binary data encoded as Base64 ASCII string */
+                if (resourceContent[i].length*count <= maxResourceSize*1024*1024)  /* skip large and/or repeated resource */
+                {
+                    try { asciistring = btoa(resourceContent[i]); }
+                    catch (e) { asciistring = ""; }  /* resource content not a binary string */
+                    
+                    return "data:" + resourceMimeType[i] + ";base64," + asciistring;  /* binary data encoded as Base64 ASCII string */
+                }
             }
             else  /* charset defined - character data */
             {
@@ -4041,23 +5680,28 @@ function removePageLoader()
 
 /* Extract saved page media (image/audio/video) function */
 
-function extractSavedPageMedia(srcurl)
+function extractSavedPageMedia()
 {
-    chrome.runtime.sendMessage({ type: "setSaveBadge", text: "EXT", color: "#00A000" });
+    saveState = 5;
     
-    if (!extract(0,window,document.documentElement)) alert("Image/Audio/Video element not found.");
+    chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState });
     
-    chrome.runtime.sendMessage({ type: "setSaveBadge", text: "", color: "#000000" });
+    if (!extract(0,window,document.documentElement))
+    {
+        showMessage("Extract Image/Audio/Video failed","Extract","Image/Audio/Video element not found.",null,null);
+    }
+    
+    saveState = 8;
+    
+    window.setTimeout(function() { chrome.runtime.sendMessage({ type: "stateChanged", pagetype: pageType, savestate: saveState }); },1000);
     
     function extract(depth,frame,element)
     {
-        var i,baseuri,location,mediaURL,filename,datestr,text,link;
-        var pathsegments = new Array();
-        var date = new Date();
+        var i,baseuri,location,filename,link,shadowroot;
         
         if (element.localName == "img" || element.localName == "audio" || element.localName == "video" || element.localName == "source")
         {
-            if (element.src == srcurl)  /* image/audio/video found */
+            if (element.src == extractSrcUrl)  /* image/audio/video found */
             {
                 baseuri = element.ownerDocument.baseURI;
                 
@@ -4071,13 +5715,18 @@ function extractSavedPageMedia(srcurl)
                         
                         link = document.createElement("a");
                         link.download = filename;
-                        link.href = srcurl;
+                        link.href = extractSrcUrl;
                         
-                        document.body.appendChild(link);
+                        link.addEventListener("click",handleClick,true);
                         
-                        link.click();  /* save image/audio/video as file */
+                        link.dispatchEvent(new MouseEvent("click"));  /* save image/audio/video as file */
                         
-                        document.body.removeChild(link);
+                        link.removeEventListener("click",handleClick,true);
+                        
+                        function handleClick(event)
+                        {
+                            event.stopPropagation();
+                        }
                         
                         return true;
                     }
@@ -4103,6 +5752,23 @@ function extractSavedPageMedia(srcurl)
         }
         else
         {
+            /* Handle shadow child elements */
+            
+            if (isFirefox) shadowroot = element.shadowRoot || element.openOrClosedShadowRoot;
+            else shadowroot = element.shadowRoot || ((chrome.dom && element instanceof HTMLElement) ? chrome.dom.openOrClosedShadowRoot(element) : null);
+            
+            if (shadowroot != null)
+            {
+                if (shadowElements.indexOf(element.localName) < 0)  /* ignore elements with built-in Shadow DOM */
+                {
+                    for (i = 0; i < shadowroot.children.length; i++)
+                        if (shadowroot.children[i] != null)  /* in case web page not fully loaded before extracting */
+                            if (extract(depth,frame,shadowroot.children[i])) return true;
+                }
+            }
+            
+            /* Handle normal child elements */
+            
             for (i = 0; i < element.children.length; i++)
                 if (element.children[i] != null)  /* in case web page not fully loaded before extracting */
                     if (extract(depth,frame,element.children[i])) return true;
@@ -4110,6 +5776,320 @@ function extractSavedPageMedia(srcurl)
         
         return false;
     }
+}
+
+/************************************************************************/
+
+/* Save utility functions */
+
+function showMessage(messagetitle,buttonsuffix,messagetext,continuefunction,cancelfunction)
+{
+    var parser,messagedoc,container;
+    
+    /* Parse message document */
+    
+    parser = new DOMParser();
+    messagedoc = parser.parseFromString(messagePanel,"text/html");
+    
+    /* Create container element */
+    
+    container = document.createElement("div");
+    container.setAttribute("id","savepage-message-panel-container");
+    document.documentElement.appendChild(container);
+    
+    /* Append message elements */
+    
+    container.appendChild(messagedoc.getElementById("savepage-message-panel-overlay"));
+    
+    /* Set title, button names and contents */
+    
+    document.getElementById("savepage-message-panel-header").textContent = messagetitle;
+    document.getElementById("savepage-message-panel-continue").textContent = "Continue " + buttonsuffix;
+    document.getElementById("savepage-message-panel-cancel").textContent = "Cancel " + buttonsuffix;
+    document.getElementById("savepage-message-panel-text").textContent = messagetext;
+    
+    /* Add listeners for buttons */
+    
+    document.getElementById("savepage-message-panel-cancel").addEventListener("click",clickCancel,false);
+    document.getElementById("savepage-message-panel-continue").addEventListener("click",clickContinue,false);
+    
+    /* Configure for one or two buttons */
+    
+    if (continuefunction != null)
+    {
+        /* Focus continue button */
+        
+        document.getElementById("savepage-message-panel-continue").focus();
+    }
+    else
+    {
+        /* Hide continue button */
+        
+        document.getElementById("savepage-message-panel-continue").style.setProperty("display","none","important");
+        
+        /* Focus cancel button */
+        
+        document.getElementById("savepage-message-panel-cancel").focus();
+    }
+    
+    /* Select this tab */
+    
+    chrome.runtime.sendMessage({ type: "selectTab" });
+    
+    function clickContinue()
+    {
+        document.documentElement.removeChild(document.getElementById("savepage-message-panel-container"));
+        
+        continuefunction();
+    }
+    
+    function clickCancel()            
+    {
+        document.documentElement.removeChild(document.getElementById("savepage-message-panel-container"));
+        
+        cancelfunction();
+    }
+}
+
+function removeQuotes(url)
+{
+    if (url.substr(0,1) == "\"" || url.substr(0,1) == "'") url = url.substr(1);
+    
+    if (url.substr(-1) == "\"" || url.substr(-1) == "'") url = url.substr(0,url.length-1);
+    
+    return url;
+}
+
+function replaceableResourceURL(url)
+{
+    /* Exclude data: urls, blob: urls, moz-extension: urls, fragment-only urls and empty urls */
+    
+    if (url.substr(0,5).toLowerCase() == "data:" || url.substr(0,5).toLowerCase() == "blob:" ||
+        url.substr(0,14).toLowerCase() == "moz-extension:" || url.substr(0,1) == "#" || url == "") return false;
+    
+    return true;
+}
+
+function resolveURL(url,baseuri)
+{
+    var resolvedURL;
+    
+    try
+    {
+        resolvedURL = new URL(url,baseuri);
+    }
+    catch (e)
+    {
+        return null;  /* baseuri invalid or null */
+    }
+    
+    return resolvedURL.href;
+}
+
+function removeFragment(url)
+{
+    var i;
+    
+    i = url.indexOf("#");
+    
+    if (i >= 0) return url.substr(0,i);
+    
+    return url;
+}
+
+function getSavedFileName(url,title,extract)
+{
+    var i,documentURL,host,hostw,path,pathw,file,filew,query,fragment,date,datestr,pubelement,pubstr,pubdate,pubdatestr,filename,regex,minlength;
+    var pubmatches = [];
+    var mediaextns = [ ".jpe",".jpg",".jpeg",".gif",".png",".bmp",".ico",".svg",".svgz",".tif",".tiff",".ai",".drw",".pct",".psp",".xcf",".psd",".raw",".webp",  /* Firefox image extensions */
+                       ".aac",".aif",".flac",".iff",".m4a",".m4b",".mid",".midi",".mp3",".mpa",".mpc",".oga",".ogg",".ra",".ram",".snd",".wav",".wma",  /* Firefox audio extensions */
+                       ".avi",".divx",".flv",".m4v",".mkv",".mov",".mp4",".mpeg",".mpg",".ogm",".ogv",".ogx",".rm",".rmvb",".smil",".webm",".wmv",".xvid"];  /* Firefox video extensions */
+    
+    documentURL = new URL(url);
+    
+    host = documentURL.hostname;
+    host = decodeURIComponent(host);
+    host = sanitizeString(host);
+    
+    hostw = host.replace(/^www\./,"");
+    
+    path = documentURL.pathname;
+    path = decodeURIComponent(path);
+    path = sanitizeString(path);
+    path = path.replace(/^\/|\/$/g,"");
+    
+    pathw = path.replace(/\.[^.\/]+$/,"");
+    
+    file = path.replace(/[^\/]*\//g,"");
+    
+    filew = file.replace(/\.[^.]+$/,"");
+    
+    query = documentURL.search.substr(1);
+    
+    fragment = documentURL.hash.substr(1);
+    
+    title = sanitizeString(title);
+    title = title.trim();
+    title = title.replace(/^\./,"_");
+    if (title == "") title = file;
+    
+    date = new Date();
+    datestr = new Date(date.getTime()-(date.getTimezoneOffset()*60000)).toISOString();
+    
+    if ((pubelement = document.querySelector("meta[property='article:published_time'][content]")) != null) pubstr = pubelement.getAttribute("content");  /* Open Graph - ISO8601 */
+    else if ((pubelement = document.querySelector("meta[property='datePublished'][content]")) != null) pubstr = pubelement.getAttribute("content");  /* Generic RDFa - ISO8601 */
+    else if ((pubelement = document.querySelector("meta[itemprop='datePublished'][content]")) != null) pubstr = pubelement.getAttribute("content");  /* Microdata - ISO8601 */
+    else if ((pubelement = document.querySelector("script[type='application/ld+json']")) != null)  /* JSON-LD - ISO8601 */
+    {
+        pubmatches = pubelement.textContent.match(/"datePublished"\s*:\s*"([^"]*)"/);
+        pubstr = pubmatches ? pubmatches[1] : null;
+    }
+    else if ((pubelement = document.querySelector("time[datetime]")) != null) pubstr = pubelement.getAttribute("datetime");  /* HTML5 - ISO8601 and similar formats */
+    else pubstr = null;
+    
+    try 
+    {
+        if (!pubstr) throw false;
+        pubstr = pubstr.replace(/(Z|(-|\+)\d\d:?\d\d)$/,"");  /* remove timezone */
+        pubdate = new Date(pubstr);
+        pubdatestr = new Date(pubdate.getTime()-(pubdate.getTimezoneOffset()*60000)).toISOString();
+    }
+    catch (e) { pubdatestr = ""; }
+    
+    filename = savedFileName;
+    
+    regex = /(%TITLE%|%DATE\((.?)\)%|%TIME\((.?)\)%|%DATEP\((.?)\)%|%TIMEP\((.?)\)%|%DATEPF\((.?)\)%|%TIMEPF\((.?)\)%|%HOST%|%HOSTW%|%PATH%|%PATHW%|%FILE%|%FILEW%|%QUERY\(([^)]*)\)%|%FRAGMENT%)/g;
+    
+    minlength = filename.replace(regex,"").length;
+    
+    filename = filename.replace(regex,_replacePredefinedFields);
+    
+    function _replacePredefinedFields(match,p1,p2,p3,p4,p5,p6,p7,p8,offset,string)
+    {
+        var date,time,value;
+        var params = {};
+        
+        if (p1 == "%TITLE%") return _truncateField(p1,title);
+        else if (p1.substr(0,6) == "%DATE(" && p1.substr(-2) == ")%")
+        {
+            date = datestr.substr(0,10).replace(/-/g,p2);
+            return _truncateField(p1,date);
+        }
+        else if (p1.substr(0,6) == "%TIME(" && p1.substr(-2) == ")%")
+        {
+            time = datestr.substr(11,8).replace(/:/g,p3);
+            return _truncateField(p1,time);
+        }
+        else if (p1.substr(0,7) == "%DATEP(" && p1.substr(-2) == ")%")
+        {
+            date = pubdatestr.substr(0,10).replace(/-/g,p4);
+            return _truncateField(p1,date);
+        }
+        else if (p1.substr(0,7) == "%TIMEP(" && p1.substr(-2) == ")%")
+        {
+            time = pubdatestr.substr(11,8).replace(/:/g,p5);
+            return _truncateField(p1,time);
+        }
+        else if (p1.substr(0,8) == "%DATEPF(" && p1.substr(-2) == ")%")
+        {
+            date = (pubdatestr != "") ? pubdatestr.substr(0,10).replace(/-/g,p6) : datestr.substr(0,10).replace(/-/g,p6);
+            return _truncateField(p1,date);
+        }
+        else if (p1.substr(0,8) == "%TIMEPF(" && p1.substr(-2) == ")%")
+        {
+            time = (pubdatestr != "") ? pubdatestr.substr(11,8).replace(/:/g,p7) : datestr.substr(11,8).replace(/:/g,p7);
+            return _truncateField(p1,time);
+        }
+        else if (p1 == "%HOST%") return _truncateField(p1,host);
+        else if (p1 == "%HOSTW%") return _truncateField(p1,hostw);
+        else if (p1 == "%FILE%") return _truncateField(p1,file);
+        else if (p1 == "%FILEW%") return _truncateField(p1,filew);
+        else if (p1 == "%PATH%") return _truncateField(p1,path);
+        else if (p1 == "%PATHW%") return _truncateField(p1,pathw);
+        else if (p1.substr(0,7) == "%QUERY(" && p1.substr(-2) == ")%")
+        {
+            if (p8 == "") return _truncateField(p1,query);
+            params = new URLSearchParams(query);
+            value = params.get(p8);
+            if (value == null) value = "";
+            return _truncateField(p1,value);
+        }
+        else if (p1 == "%FRAGMENT%") return _truncateField(p1,fragment);
+    }
+    
+    function _truncateField(field,repstr)
+    {
+        var maxextnlength = 6;
+        
+        if (repstr.length > maxFileNameLength-maxextnlength-minlength) repstr = repstr.substr(0,maxFileNameLength-maxextnlength-minlength);
+        
+        minlength += repstr.length;
+        
+        return repstr;
+    }
+    
+    if (!extract)
+    {
+        if (filename == "") filename = "html";
+        
+        if (filename.substr(-4) != ".htm" && filename.substr(-5) != ".html" &&
+            filename.substr(-6) != ".shtml" && filename.substr(-6) != ".xhtml") filename += ".html";  /* Firefox HTML extensions */
+    }
+    else
+    {
+        if (filename == "") filename = "media";
+        
+        for (i = 0; i < mediaextns.length; i++)
+        {
+            if (file.substr(-mediaextns[i].length) == mediaextns[i] &&
+                filename.substr(-mediaextns[i].length) != mediaextns[i]) filename += mediaextns[i];
+        }
+    }
+    
+    filename = filename.replace(/(\\|\/|:|\*|\?|"|<|>|\|)/g,"_");
+    
+    if (replaceSpaces) filename = filename.replace(/\s/g,replaceChar);
+    
+    filename = filename.trim();
+    
+    return filename;
+}
+
+function sanitizeString(string)
+{
+    var i,charcode;
+    
+    /* Remove control characters: 0-31 and 255 */ 
+    /* Remove other line break characters: 133, 8232, 8233 */ 
+    /* Remove zero-width characters: 6158, 8203, 8204, 8205, 8288, 65279 */ 
+    /* Change all space characters to normal spaces: 160, 5760, 8192-8202, 8239, 8287, 12288 */
+    /* Change all hyphen characters to normal hyphens: 173, 1470, 6150, 8208-8213, 8315, 8331, 8722, 11834, 11835, 65112, 65123, 65293 */
+    
+    for (i = 0; i < string.length; i++)
+    {
+        charcode = string.charCodeAt(i);
+        
+        if (charcode <= 31 || charcode == 255 ||
+            charcode == 133 || charcode == 8232 || charcode == 8233 ||
+            charcode == 6158 || charcode == 8203 || charcode == 8204 || charcode == 8205 || charcode == 8288 || charcode == 65279)
+        {
+            string = string.substr(0,i) + string.substr(i+1);
+        }
+        
+        if (charcode == 160 || charcode == 5760 || (charcode >= 8192 && charcode <= 8202) || charcode == 8239 || charcode == 8287 || charcode == 12288)
+        {
+            string = string.substr(0,i) + " " + string.substr(i+1);
+        }
+        
+        if (charcode == 173 || charcode == 1470 || charcode == 6150 || (charcode >= 8208 && charcode <= 8213) ||
+            charcode == 8315 || charcode == 8331 || charcode == 8722 || charcode == 11834 || charcode == 11835 ||
+            charcode == 65112 || charcode == 65123 || charcode == 65293)
+        {
+            string = string.substr(0,i) + "-" + string.substr(i+1);
+        }
+    }
+    
+    return string;
 }
 
 /************************************************************************/

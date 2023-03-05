@@ -1,19 +1,32 @@
 <!--
 /************************************************************************/
 /*                                                                      */
-/*      Save Page WE - Generic WebExtensionn - Page Information Bar     */
+/*      Save Page WE - Generic WebExtension - Page Information Bar      */
 /*                                                                      */
 /*      HTML and CSS for Page Information Bar                           */
 /*                                                                      */
-/*      Last Edit - 22 May 2018                                         */
+/*      Last Edit - 11 Aug 2022                                         */
 /*                                                                      */
-/*      Copyright (C) 2017-2018 DW-dev                                  */
+/*      Copyright (C) 2017-2022 DW-dev                                  */
 /*                                                                      */
 /*      Distributed under the GNU General Public License version 2      */
 /*      See LICENCE.txt file and http://www.gnu.org/licenses/           */
 /*                                                                      */
 /************************************************************************/
+
+/************************************************************************/
+/*                                                                      */
+/* Notes on Page Information Bar                                        */
+/*                                                                      */
+/* 1. Page Information Bar overlays the top of the saved page.          */
+/*                                                                      */
+/* 2. Create pageinfo-bar-compressed.html by minifying source code      */
+/*    using https://codebeautify.org/minify-html.                       */
+/*                                                                      */
+/************************************************************************/
 -->
+
+<!DOCTYPE html>
 
 <html>
     
@@ -56,21 +69,14 @@
             background: #F8F8F8 !important;
         }
         
-        #savepage-pageinfo-bar-link-box
+        #savepage-pageinfo-bar-link
         {
             flex: 0 1 auto !important;
             padding: 4px 0px !important;
             background: #F8F8F8 !important;
+            white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-        }
-        
-        #savepage-pageinfo-bar-link
-        {
-            padding: 4px 0px !important;
-            background: #F8F8F8 !important;
-            color: #6060E0 !important;
-            white-space: nowrap !important;
         }
         
         #savepage-pageinfo-bar-link:hover
@@ -101,33 +107,24 @@
             background: #F8F8F8 !important;
         }
         
-        #savepage-pageinfo-bar-button-box
-        {
-            flex: 0 0 auto !important;
-            padding: 3px !important;
-            border-left: 1px solid #E0E0E0 !important;
-            border-right: 1px solid #E0E0E0 !important;
-            background: #F8F8F8 !important;
-        }
-        
         #savepage-pageinfo-bar-button
         {
-            padding: 0px 5px !important;
-            border: 1px solid #E2E2E2 !important;
-            background: #F2F2F2 !important;
-            font-size: 12px !important;
+            flex: 0 0 25px !important;
+            background-color: #F8F8F8 !important;
+            background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA8SURBVChTYwCC/0DsAGJgASBxkDycga4QQxxdAEMBDCBLYFUAAyQpIGgVCGAoxBCAAhRxrEZDAVCc4T8AbzkX8F/+uCwAAAAASUVORK5CYII=) !important;
+            background-repeat: no-repeat !important;
+            background-position: center center !important;
         }
         
         #savepage-pageinfo-bar-button:hover
         {
-            background: #E2E2E2 !important;
+            background-color: #E8E8E8 !important;
         }
         
         #savepage-pageinfo-bar-button:active
         {
-            background: #D2D2D2 !important;
+            background-color: #D8D8D8 !important;
         }
-        
         
     </style>
     
@@ -135,11 +132,7 @@
         
         <div id="savepage-pageinfo-bar-spacer-1">&nbsp;&nbsp;&nbsp;</div>
         
-        <div id="savepage-pageinfo-bar-link-box">
-            
-            <a id="savepage-pageinfo-bar-link" href="%URL%" target="_blank">%DECODED-URL%</a>
-            
-        </div>
+        <a id="savepage-pageinfo-bar-link" href="%URL%" target="_blank">%DECODED-URL%</a>
         
         <div id="savepage-pageinfo-bar-spacer-2">&nbsp;&nbsp;&nbsp;</div>
         
@@ -147,11 +140,7 @@
         
         <div id="savepage-pageinfo-bar-spacer-3">&nbsp;&nbsp;&nbsp;</div>
         
-        <div id="savepage-pageinfo-bar-button-box">
-            
-            <div id="savepage-pageinfo-bar-button">X</div>
-            
-        </div>
+        <div id="savepage-pageinfo-bar-button"></div>
         
     </div>
     

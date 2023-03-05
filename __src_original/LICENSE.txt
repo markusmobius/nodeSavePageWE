@@ -5,7 +5,7 @@
 Save Page WE is an extension program for web browsers that allows 
 saving a complete web page as a single HTML file. 
 
-Copyright (C) 2016-2018 DW-dev
+Copyright (C) 2016-2022 DW-dev
 
 Save Page WE is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License version 2 as
