@@ -33,6 +33,9 @@ module.exports = {
             height: 10000
         });
 
+        // Allow injected scripts to be executed
+        await page.setBypassCSP(true);
+
         await page.goto(task.url, { timeout: 180000, waitUntil: ['domcontentloaded'] });
 
 
