@@ -16,6 +16,7 @@ module.exports = {
     scrape: async function (task) {
 
         const fs = require('fs');
+        const path = require('path');
         const puppeteer = require('puppeteer');
 
         require('events').EventEmitter.defaultMaxListeners = 50;
@@ -36,7 +37,7 @@ module.exports = {
         await page.goto(task.url, { timeout: 180000, waitUntil: ['domcontentloaded'] });
 
 
-        await page.addScriptTag({ path: "nodeSavePageWE_client.js" });
+        await page.addScriptTag({ path: path.join(__dirname, 'nodeSavePageWE_client.js') });
 
 
         await page.evaluate(async (params) => { 
