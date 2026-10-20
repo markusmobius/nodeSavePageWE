@@ -1,0 +1,54 @@
+name: Publish to npm
+
+# Stages the package on npm when a GitHub release is published. A maintainer then approves the
+# staged version with 2FA on npmjs.com (Staged Packages tab) or with `npm stage approve <stage-id>`.
+# See DEVELOPMENT.md.
+#
+# Authentication, either:
+#   - repository secret NPM_TOKEN: an npm granular access token with "Read and write (stage only)" permission, or
+#   - npm trusted publishing (OIDC) for this workflow, configured on npmjs.com - then no secret is needed.
+# The release tag must match the version in package.json, e.g. v1.0.0.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write  # for npm trusted publishing (OIDC)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Check release tag matches package.json version
+        run: |
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Release tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+            exit 1
+          fi
+
+      # Ubuntu 23.10+ blocks the unprivileged user namespaces that Chrome's sandbox uses
+      - name: Allow Chrome sandbox
+        run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+
+      - run: npm ci
+
+      - run: npm test
+
+      # `npm stage` needs npm 11.15.0 or later - newer than the npm bundled with Node 22
+      - run: npm install --global npm@^11.15.0
+
+      - name: Stage the package for approval
+        run: npm stage publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

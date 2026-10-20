@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>save-page-we samples</title>
+<style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2328; background: #f6f8fa; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 12px; background: #fff; border-bottom: 1px solid #d0d7de; }
+    h1 { font-size: 15px; margin: 0 8px 0 0; white-space: nowrap; }
+    h1 a { color: inherit; text-decoration: none; }
+    label { display: flex; align-items: center; gap: 6px; }
+    select { font: inherit; padding: 4px 6px; border: 1px solid #d0d7de; border-radius: 6px; background: #fff; }
+    .group { display: inline-flex; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; }
+    .group button { font: inherit; padding: 4px 10px; border: 0; border-left: 1px solid #d0d7de; background: #fff; cursor: pointer; }
+    .group button:first-child { border-left: 0; }
+    .group button[aria-pressed="true"] { background: #0969da; color: #fff; }
+    .group button:disabled { color: #8c959f; cursor: default; }
+    #panes { flex: 1; display: grid; gap: 1px; background: #d0d7de; min-height: 0; }
+    .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; }
+    .pane .info { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 4px 10px; font-size: 12px; color: #57606a; background: #f6f8fa; border-bottom: 1px solid #d0d7de; }
+    .pane .info strong { color: #1f2328; }
+    .pane .info a { margin-left: auto; }
+    .pane iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+    .message { margin: auto; max-width: 640px; padding: 24px; text-align: center; color: #57606a; }
+    .message code { background: #eaeef2; padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+    <h1><a href="https://github.com/markusmobius/nodeSavePageWE">save-page-we</a> samples</h1>
+    <label>Publisher <select id="publisher"></select></label>
+    <div class="group" id="loading" role="group" aria-label="Lazy loading"></div>
+    <div class="group" id="level" role="group" aria-label="Blocking"></div>
+    <div class="group" id="layout" role="group" aria-label="Layout">
+        <button type="button" data-value="single">One page</button>
+        <button type="button" data-value="compare">Compare blocking</button>
+    </div>
+</header>
+<main id="panes"></main>
+
+<script>
+"use strict";
+
+const state = { publisher: null, loading: null, level: null, layout: 'single' };
+const cache = new Map();  // sample file -> Promise<blob URL>
+const MAX_CACHED = 8;
+let manifest;
+
+const $ = id => document.getElementById(id);
+const mb = bytes => (bytes / 1048576).toFixed(1) + ' MB';
+
+function showMessage(html) {
+    $('panes').style.gridTemplateColumns = '1fr';
+    $('panes').innerHTML = `<div class="pane"><div class="message">${html}</div></div>`;
+}
+
+function fileFor(loading, level, publisher) {
+    return `${loading}/${level}/${publisher}.html.gz`;
+}
+
+// Fetch a sample and unpack it - also works if the server already decompressed it (Content-Encoding: gzip)
+function sampleUrl(file) {
+    if (!cache.has(file)) {
+        const loading = (async () => {
+            const response = await fetch(file);
+            if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            const gzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
+            const html = gzipped ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).blob() : new Blob([bytes]);
+            return URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+        })();
+        cache.set(file, loading);
+        loading.catch(() => cache.delete(file));
+
+        // Keep memory in check - saved pages can be tens of MB each
+        while (cache.size > MAX_CACHED) {
+            const [oldest, url] = cache.entries().next().value;
+            cache.delete(oldest);
+            url.then(u => URL.revokeObjectURL(u), () => { });
+        }
+    }
+    return cache.get(file);
+}
+
+function setGroup(id, entries, value, available) {
+    const group = $(id);
+    group.innerHTML = '';
+    for (const [key, entry] of Object.entries(entries)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.value = key;
+        button.textContent = entry.name;
+        button.setAttribute('aria-pressed', String(key === value));
+        button.disabled = available ? !available(key) : false;
+        button.addEventListener('click', () => { state[id] = key; update(); });
+        group.appendChild(button);
+    }
+}
+
+function exists(loading, level, publisher) {
+    return !!manifest.samples[fileFor(loading, level, publisher)];
+}
+
+function pane(loading, level, publisher) {
+    const file = fileFor(loading, level, publisher);
+    const sample = manifest.samples[file];
+    const element = document.createElement('div');
+    element.className = 'pane';
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    if (!sample) {
+        info.innerHTML = `<strong>${manifest.levels[level].name}</strong> not saved`;
+        element.appendChild(info);
+        return element;
+    }
+    info.innerHTML = `<strong>${manifest.levels[level].name}</strong>` +
+        `<span>${mb(sample.bytes)} (${mb(sample.compressedBytes)} download)</span>` +
+        `<span>${sample.resources} resources, ${sample.failed} failed, ${sample.blockedRequests} blocked</span>` +
+        `<span>saved ${new Date(sample.saved).toLocaleString()}</span>` +
+        `<a href="#" target="_blank" rel="noopener">Open in new tab</a>`;
+    element.appendChild(info);
+
+    // Saved pages only run the small script that rebuilds shadow DOM; the sandbox keeps them away from this page
+    const frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+    frame.title = `${manifest.publishers[publisher].name} - ${manifest.levels[level].name}`;
+    element.appendChild(frame);
+
+    sampleUrl(file).then(url => {
+        frame.src = url;
+        info.querySelector('a').href = url;
+    }, error => {
+        element.replaceChild(Object.assign(document.createElement('div'), { className: 'message', textContent: `Could not load ${file}: ${error.message}` }), frame);
+    });
+    return element;
+}
+
+function update() {
+    const { publishers, loadings, levels } = manifest;
+    if (!publishers[state.publisher]) state.publisher = Object.keys(publishers)[0];
+    if (!loadings[state.loading]) state.loading = Object.keys(loadings)[0];
+    if (!levels[state.level]) state.level = Object.keys(levels)[0];
+
+    $('publisher').value = state.publisher;
+    setGroup('loading', loadings, state.loading);
+    setGroup('level', levels, state.level, level => state.layout === 'single' && exists(state.loading, level, state.publisher));
+    for (const button of $('layout').children) button.setAttribute('aria-pressed', String(button.dataset.value === state.layout));
+
+    history.replaceState(null, '', `#${state.publisher}/${state.loading}/${state.level}/${state.layout}`);
+
+    const shown = state.layout === 'compare' ? Object.keys(levels) : [state.level];
+    $('panes').style.gridTemplateColumns = `repeat(${shown.length}, 1fr)`;
+    $('panes').replaceChildren(...shown.map(level => pane(state.loading, level, state.publisher)));
+}
+
+async function init() {
+    if (location.protocol === 'file:') {
+        showMessage('Browsers do not let a page opened from disk read other files. Run <code>npm run samples:view</code> to view the samples.');
+        return;
+    }
+    if (typeof DecompressionStream === 'undefined') {
+        showMessage('This browser cannot unpack the compressed samples. Please use a current version of Chrome, Edge, Firefox or Safari.');
+        return;
+    }
+
+    try {
+        const response = await fetch('manifest.json', { cache: 'no-cache' });
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        manifest = await response.json();
+    }
+    catch (e) {
+        showMessage(`No samples found (manifest.json: ${e.message}). Create them with <code>npm run samples</code>.`);
+        return;
+    }
+
+    const [publisher, loading, level, layout] = location.hash.slice(1).split('/');
+    Object.assign(state, { publisher, loading, level, layout: layout === 'compare' ? 'compare' : 'single' });
+
+    for (const [id, p] of Object.entries(manifest.publishers)) $('publisher').add(new Option(p.name, id));
+    $('publisher').addEventListener('change', () => { state.publisher = $('publisher').value; update(); });
+    for (const button of $('layout').children) button.addEventListener('click', () => { state.layout = button.dataset.value; update(); });
+
+    update();
+}
+
+init();
+</script>
+</body>
+</html>

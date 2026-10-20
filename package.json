@@ -1,0 +1,67 @@
+{
+  "name": "save-page-we",
+  "version": "1.0.0",
+  "description": "Save a complete web page as a single self-contained HTML file with headless Chrome - a Node.js port of the Save Page WE browser extension",
+  "keywords": [
+    "save page",
+    "single file",
+    "html",
+    "archive",
+    "web archive",
+    "snapshot",
+    "offline",
+    "puppeteer",
+    "headless chrome",
+    "scraper",
+    "ad blocker"
+  ],
+  "homepage": "https://github.com/markusmobius/nodeSavePageWE#readme",
+  "bugs": {
+    "url": "https://github.com/markusmobius/nodeSavePageWE/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markusmobius/nodeSavePageWE.git"
+  },
+  "license": "GPL-2.0-only",
+  "author": "Markus Mobius <markusmobius@gmail.com>",
+  "contributors": [
+    "DW-dev (original Save Page WE extension)"
+  ],
+  "main": "lib/index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "savepagewe": "bin/savepagewe.js"
+  },
+  "files": [
+    "lib/",
+    "bin/",
+    "index.d.ts",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=120000 \"test/*.test.js\"",
+    "example": "node examples/basic.js",
+    "samples": "node scripts/update-samples.js",
+    "samples:view": "node scripts/view-samples.js",
+    "samples:publish": "node scripts/publish-samples.js",
+    "prepublishOnly": "npm test"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-puppeteer": "^2.20.1",
+    "puppeteer": "^25.13.0"
+  },
+  "devDependencies": {
+    "@fontsource/roboto": "^5.3.0"
+  }
+}
