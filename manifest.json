@@ -1,0 +1,355 @@
+{
+  "samples": {
+    "nonlazy/extended/cbsnews.html.gz": {
+      "publisher": "cbsnews",
+      "loading": "nonlazy",
+      "level": "extended",
+      "url": "https://www.cbsnews.com",
+      "saved": "2026-10-20T23:37:01.180Z",
+      "bytes": 6165669,
+      "compressedBytes": 3610572,
+      "resources": 48,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 37
+    },
+    "nonlazy/simple/cbsnews.html.gz": {
+      "publisher": "cbsnews",
+      "loading": "nonlazy",
+      "level": "simple",
+      "url": "https://www.cbsnews.com",
+      "saved": "2026-10-20T23:35:53.187Z",
+      "bytes": 6039938,
+      "compressedBytes": 3595242,
+      "resources": 48,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 8
+    },
+    "lazy/simple/cbsnews.html.gz": {
+      "publisher": "cbsnews",
+      "loading": "lazy",
+      "level": "simple",
+      "url": "https://www.cbsnews.com",
+      "saved": "2026-10-20T23:39:11.289Z",
+      "bytes": 6057905,
+      "compressedBytes": 3595601,
+      "resources": 48,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 19
+    },
+    "lazy/extended/cbsnews.html.gz": {
+      "publisher": "cbsnews",
+      "loading": "lazy",
+      "level": "extended",
+      "url": "https://www.cbsnews.com",
+      "saved": "2026-10-20T23:39:38.032Z",
+      "bytes": 6166520,
+      "compressedBytes": 3610348,
+      "resources": 49,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 38
+    },
+    "lazy/annoyances/cbsnews.html.gz": {
+      "publisher": "cbsnews",
+      "loading": "lazy",
+      "level": "annoyances",
+      "url": "https://www.cbsnews.com",
+      "saved": "2026-10-20T23:38:00.748Z",
+      "bytes": 6469339,
+      "compressedBytes": 3639346,
+      "resources": 50,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 1
+    },
+    "nonlazy/annoyances/guardian.html.gz": {
+      "publisher": "guardian",
+      "loading": "nonlazy",
+      "level": "annoyances",
+      "url": "https://www.theguardian.com/international",
+      "saved": "2026-10-20T23:40:35.261Z",
+      "bytes": 12335338,
+      "compressedBytes": 7565862,
+      "resources": 222,
+      "failed": 13,
+      "skipped": 0,
+      "blockedRequests": 0
+    },
+    "nonlazy/simple/guardian.html.gz": {
+      "publisher": "guardian",
+      "loading": "nonlazy",
+      "level": "simple",
+      "url": "https://www.theguardian.com/international",
+      "saved": "2026-10-20T23:41:19.253Z",
+      "bytes": 11393789,
+      "compressedBytes": 7513019,
+      "resources": 133,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 28
+    },
+    "nonlazy/extended/guardian.html.gz": {
+      "publisher": "guardian",
+      "loading": "nonlazy",
+      "level": "extended",
+      "url": "https://www.theguardian.com/international",
+      "saved": "2026-10-20T23:42:06.064Z",
+      "bytes": 11435144,
+      "compressedBytes": 7521351,
+      "resources": 133,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 28
+    },
+    "lazy/simple/guardian.html.gz": {
+      "publisher": "guardian",
+      "loading": "lazy",
+      "level": "simple",
+      "url": "https://www.theguardian.com/international",
+      "saved": "2026-10-20T23:44:26.231Z",
+      "bytes": 20518148,
+      "compressedBytes": 14367716,
+      "resources": 134,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 32
+    },
+    "lazy/extended/guardian.html.gz": {
+      "publisher": "guardian",
+      "loading": "lazy",
+      "level": "extended",
+      "url": "https://www.theguardian.com/international",
+      "saved": "2026-10-20T23:44:47.742Z",
+      "bytes": 20558458,
+      "compressedBytes": 14376225,
+      "resources": 134,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 31
+    },
+    "nonlazy/annoyances/cbsnews.html.gz": {
+      "publisher": "cbsnews",
+      "loading": "nonlazy",
+      "level": "annoyances",
+      "url": "https://www.cbsnews.com",
+      "saved": "2026-10-20T23:35:22.086Z",
+      "bytes": 6144112,
+      "compressedBytes": 3605593,
+      "resources": 48,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 1
+    },
+    "nonlazy/simple/politico.html.gz": {
+      "publisher": "politico",
+      "loading": "nonlazy",
+      "level": "simple",
+      "url": "https://www.politico.com",
+      "saved": "2026-10-20T23:47:27.526Z",
+      "bytes": 16498493,
+      "compressedBytes": 11504366,
+      "resources": 122,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 26
+    },
+    "nonlazy/extended/politico.html.gz": {
+      "publisher": "politico",
+      "loading": "nonlazy",
+      "level": "extended",
+      "url": "https://www.politico.com",
+      "saved": "2026-10-20T23:48:21.980Z",
+      "bytes": 16525047,
+      "compressedBytes": 11515063,
+      "resources": 122,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 21
+    },
+    "nonlazy/annoyances/politico.html.gz": {
+      "publisher": "politico",
+      "loading": "nonlazy",
+      "level": "annoyances",
+      "url": "https://www.politico.com",
+      "saved": "2026-10-20T23:46:44.423Z",
+      "bytes": 17337333,
+      "compressedBytes": 11609516,
+      "resources": 263,
+      "failed": 30,
+      "skipped": 0,
+      "blockedRequests": 0
+    },
+    "lazy/annoyances/politico.html.gz": {
+      "publisher": "politico",
+      "loading": "lazy",
+      "level": "annoyances",
+      "url": "https://www.politico.com",
+      "saved": "2026-10-20T23:52:33.102Z",
+      "bytes": 19810980,
+      "compressedBytes": 13499186,
+      "resources": 284,
+      "failed": 30,
+      "skipped": 0,
+      "blockedRequests": 0
+    },
+    "lazy/simple/politico.html.gz": {
+      "publisher": "politico",
+      "loading": "lazy",
+      "level": "simple",
+      "url": "https://www.politico.com",
+      "saved": "2026-10-20T23:53:16.005Z",
+      "bytes": 16509032,
+      "compressedBytes": 11503793,
+      "resources": 122,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 27
+    },
+    "nonlazy/annoyances/usatoday.html.gz": {
+      "publisher": "usatoday",
+      "loading": "nonlazy",
+      "level": "annoyances",
+      "url": "https://www.usatoday.com",
+      "saved": "2026-10-20T22:22:12.077Z",
+      "bytes": 11529303,
+      "compressedBytes": 6655240,
+      "resources": 472,
+      "failed": 88,
+      "skipped": 0,
+      "blockedRequests": 0
+    },
+    "nonlazy/simple/usatoday.html.gz": {
+      "publisher": "usatoday",
+      "loading": "nonlazy",
+      "level": "simple",
+      "url": "https://www.usatoday.com",
+      "saved": "2026-10-20T22:22:28.583Z",
+      "bytes": 1513450,
+      "compressedBytes": 962454,
+      "resources": 41,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 28
+    },
+    "nonlazy/extended/usatoday.html.gz": {
+      "publisher": "usatoday",
+      "loading": "nonlazy",
+      "level": "extended",
+      "url": "https://www.usatoday.com",
+      "saved": "2026-10-20T22:22:40.389Z",
+      "bytes": 1545160,
+      "compressedBytes": 968774,
+      "resources": 41,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 27
+    },
+    "lazy/extended/politico.html.gz": {
+      "publisher": "politico",
+      "loading": "lazy",
+      "level": "extended",
+      "url": "https://www.politico.com",
+      "saved": "2026-10-20T23:54:04.477Z",
+      "bytes": 16418765,
+      "compressedBytes": 11443343,
+      "resources": 122,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 19
+    },
+    "lazy/simple/usatoday.html.gz": {
+      "publisher": "usatoday",
+      "loading": "lazy",
+      "level": "simple",
+      "url": "https://www.usatoday.com",
+      "saved": "2026-10-20T22:25:23.450Z",
+      "bytes": 1306201,
+      "compressedBytes": 807003,
+      "resources": 40,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 28
+    },
+    "lazy/extended/usatoday.html.gz": {
+      "publisher": "usatoday",
+      "loading": "lazy",
+      "level": "extended",
+      "url": "https://www.usatoday.com",
+      "saved": "2026-10-20T22:32:14.864Z",
+      "bytes": 665805,
+      "compressedBytes": 315829,
+      "resources": 42,
+      "failed": 0,
+      "skipped": 0,
+      "blockedRequests": 26
+    },
+    "lazy/annoyances/usatoday.html.gz": {
+      "publisher": "usatoday",
+      "loading": "lazy",
+      "level": "annoyances",
+      "url": "https://www.usatoday.com",
+      "saved": "2026-10-20T22:24:57.360Z",
+      "bytes": 13618587,
+      "compressedBytes": 7390192,
+      "resources": 454,
+      "failed": 67,
+      "skipped": 0,
+      "blockedRequests": 0
+    },
+    "lazy/annoyances/guardian.html.gz": {
+      "publisher": "guardian",
+      "loading": "lazy",
+      "level": "annoyances",
+      "url": "https://www.theguardian.com/international",
+      "saved": "2026-10-20T23:43:30.236Z",
+      "bytes": 21738484,
+      "compressedBytes": 14493343,
+      "resources": 310,
+      "failed": 53,
+      "skipped": 0,
+      "blockedRequests": 0
+    }
+  },
+  "updated": "2026-10-20T23:54:04.477Z",
+  "version": "1.0.0",
+  "publishers": {
+    "cbsnews": {
+      "name": "CBS News",
+      "url": "https://www.cbsnews.com"
+    },
+    "guardian": {
+      "name": "The Guardian",
+      "url": "https://www.theguardian.com/international"
+    },
+    "politico": {
+      "name": "Politico",
+      "url": "https://www.politico.com"
+    },
+    "usatoday": {
+      "name": "USA Today",
+      "url": "https://www.usatoday.com"
+    }
+  },
+  "loadings": {
+    "nonlazy": {
+      "name": "Not lazy"
+    },
+    "lazy": {
+      "name": "Lazy loading"
+    }
+  },
+  "levels": {
+    "annoyances": {
+      "name": "Annoyances blocked, ads kept"
+    },
+    "simple": {
+      "name": "Ads and trackers blocked"
+    },
+    "extended": {
+      "name": "Everything blocked"
+    }
+  }
+}
