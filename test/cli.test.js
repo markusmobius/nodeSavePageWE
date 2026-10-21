@@ -76,11 +76,12 @@ test('exits with code 1 when the save fails', async () => {
     assert.match(stderr, /savepagewe: /);
 });
 
-test('explains how to install Chrome when it is missing', async () => {
-    // An empty Puppeteer cache folder looks like an install where npm skipped Puppeteer's Chrome download
+test('explains how to install Chrome when it is missing and is not downloaded', async () => {
+    // An empty Puppeteer cache folder looks like an install where npm skipped Puppeteer's Chrome download.
+    // PUPPETEER_SKIP_DOWNLOAD turns off the automatic download (which was checked by hand - it is about 150 MB).
     const emptyCache = fs.mkdtempSync(path.join(os.tmpdir(), 'save-page-we-no-chrome-'));
     try {
-        const { code, stderr } = await runWithEnv({ PUPPETEER_CACHE_DIR: emptyCache, PUPPETEER_EXECUTABLE_PATH: '' }, site.base + '/nested');
+        const { code, stderr } = await runWithEnv({ PUPPETEER_CACHE_DIR: emptyCache, PUPPETEER_EXECUTABLE_PATH: '', PUPPETEER_SKIP_DOWNLOAD: 'true' }, site.base + '/nested');
 
         assert.equal(code, 1);
         assert.match(stderr, /Chrome for Puppeteer is not installed/);

@@ -12,13 +12,9 @@ This is a Node.js port of the [Save Page WE](https://chromewebstore.google.com/d
 npm install save-page-we
 ```
 
-This also installs Puppeteer, which downloads a compatible version of Chrome. Node.js 22.12 or later is required.
+This also installs [Puppeteer](https://pptr.dev/) and a compatible version of Chrome. Node.js 22.12 or later is required.
 
-Newer npm versions don't run the install scripts of packages, which Puppeteer uses to download Chrome. If saving fails with "Chrome for Puppeteer is not installed", install Chrome once with:
-
-```
-npx puppeteer browsers install chrome
-```
+Newer npm versions don't run the install scripts of packages, which Puppeteer uses to download Chrome. In that case Chrome is downloaded the first time you save a page (one time, about 150 MB; progress is shown on stderr). To download it in advance instead, run `npx puppeteer browsers install chrome`. Set the environment variable `PUPPETEER_SKIP_DOWNLOAD=true` to turn the download off.
 
 On Linux (including WSL), Chrome may also need system libraries. If it fails to start because a library such as `libnss3.so` is missing, install them with `sudo npx puppeteer browsers install chrome --install-deps`.
 
@@ -27,10 +23,16 @@ On Linux (including WSL), Chrome may also need system libraries. If it fails to 
 ```js
 const { savePage } = require('save-page-we');
 
-savePage('https://www.nytimes.com', { path: 'nytimes.html' }).then(result => {
+savePage('https://www.nytimes.com', {
+    path: 'nytimes.html',      // file to write the saved page to
+    adblock: 'annoyances',     // 'none', 'annoyances' (default), 'simple' or 'extended' - see below
+    loadLazyContent: false     // true: scroll through the page first so lazy-loaded content is saved
+}).then(result => {
     console.log(`saved ${result.resources} resources, ${result.failed.length} failed`);
 });
 ```
+
+All options are listed under [Options](#options).
 
 `savePage()` returns a promise that resolves to:
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+### Changed
+- If Chrome for Puppeteer is not installed, it is downloaded automatically the first time a page is saved. Newer npm versions skip Puppeteer's own install script, which normally downloads it. Set `PUPPETEER_SKIP_DOWNLOAD=true` to turn this off.
+- The example script and the README's usage example show the main options (`adblock`, `loadLazyContent`).
+
 ## 1.0.1
 
 ### Fixed

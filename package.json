@@ -1,6 +1,6 @@
 {
   "name": "save-page-we",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Save a complete web page as a single self-contained HTML file with headless Chrome - a Node.js port of the Save Page WE browser extension",
   "keywords": [
     "save page",
