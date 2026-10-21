@@ -1,24 +1,23 @@
-name: Publish to npm
+name: Release
 
-# Stages the package on npm when a GitHub release is published. A maintainer then approves the
-# staged version with 2FA on npmjs.com (Staged Packages tab) or with `npm stage approve <stage-id>`.
-# See DEVELOPMENT.md.
+# Runs when a version tag such as v1.0.0 is pushed: runs the tests, stages the package on npm and creates the
+# GitHub release. A maintainer then approves the staged version with 2FA on npmjs.com (Staged Packages tab) or
+# with `npm stage approve <stage-id>`. See DEVELOPMENT.md.
 #
-# Authentication, either:
+# npm authentication, either:
 #   - repository secret NPM_TOKEN: an npm granular access token with "Read and write (stage only)" permission, or
 #   - npm trusted publishing (OIDC) for this workflow, configured on npmjs.com - then no secret is needed.
-# The release tag must match the version in package.json, e.g. v1.0.0.
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write  # to create the GitHub release
   id-token: write  # for npm trusted publishing (OIDC)
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,11 +28,11 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - name: Check release tag matches package.json version
+      - name: Check tag matches package.json version
         run: |
           VERSION="v$(node -p "require('./package.json').version")"
           if [ "$VERSION" != "$GITHUB_REF_NAME" ]; then
-            echo "Release tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION"
             exit 1
           fi
 
@@ -48,7 +47,15 @@ jobs:
       # `npm stage` needs npm 11.15.0 or later - newer than the npm bundled with Node 22
       - run: npm install --global npm@^11.15.0
 
-      - name: Stage the package for approval
+      - name: Stage the package on npm for approval
         run: npm stage publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release
+        run: |
+          # Release notes: this version's section of CHANGELOG.md
+          awk -v v="${GITHUB_REF_NAME#v}" '/^## /{p=($2==v); next} p' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}

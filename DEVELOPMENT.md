@@ -31,19 +31,24 @@ The pages are large (about 220 MB compressed together), so `samples/` is not com
 
 ## Publishing
 
-Releases go through npm's [staged publishing](https://docs.npmjs.com/staged-publishing): GitHub Actions (`.github/workflows/publish.yml`) uploads the new version to a staging area, and a maintainer approves it with two-factor authentication (2FA) before anyone can install it.
+Releases go through npm's [staged publishing](https://docs.npmjs.com/staged-publishing): GitHub Actions (`.github/workflows/release.yml`) uploads the new version to a staging area, and a maintainer approves it with two-factor authentication (2FA) before anyone can install it.
 
 ### One-time setup
 
 Enable 2FA on your npm account, then choose one way for the workflow to sign in:
 
 * **Stage-only token:** on npmjs.com, create a granular access token with the permission **Read and write (stage only)** and add it to the GitHub repository as the secret `NPM_TOKEN` (Settings > Secrets and variables > Actions). Before the first release the package doesn't exist yet, so give the token access to all packages; afterwards you can limit it to `save-page-we`.
-* **Trusted publishing (recommended by npm, no secret to manage):** once the package exists, open its settings on npmjs.com, add a trusted publisher for GitHub Actions with this repository and the workflow `publish.yml`, and allow it to stage only. Then remove the `NPM_TOKEN` secret.
+* **Trusted publishing (recommended by npm, no secret to manage):** once the package exists, open its settings on npmjs.com, add a trusted publisher for GitHub Actions with this repository and the workflow `release.yml`, and allow it to stage only. Then remove the `NPM_TOKEN` secret.
 
 ### Releasing a version
 
-1. Update `version` in `package.json` and add the changes to `CHANGELOG.md`. Commit and push.
-2. Create a GitHub release with the tag `v` + version, for example `v1.0.0`. The workflow checks the tag, runs the tests and stages the package.
+1. Update `version` in `package.json` and add the changes under a `## <version>` heading in `CHANGELOG.md`. Commit and push.
+2. Tag the commit and push the tag:
+   ```
+   git tag v1.0.1
+   git push origin v1.0.1
+   ```
+   The workflow checks that the tag matches `package.json`, runs the tests, stages the package on npm and creates the GitHub release, using the version's `CHANGELOG.md` section as release notes.
 3. Approve the staged version: on npmjs.com, open the **Staged Packages** tab and click **Approve**, or run `npm stage list save-page-we` and `npm stage approve <stage-id>` (needs npm 11.15.0 or later). Approving asks for your 2FA code.
 
 When the very first version is staged, npm creates the package with a placeholder version `0.0.0-stage`. The real version appears once you approve it.
