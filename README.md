@@ -14,9 +14,13 @@ npm install save-page-we
 
 This also installs [Puppeteer](https://pptr.dev/) and a compatible version of Chrome. Node.js 22.12 or later is required.
 
-Newer npm versions don't run the install scripts of packages, which Puppeteer uses to download Chrome. In that case Chrome is downloaded the first time you save a page (one time, about 150 MB; progress is shown on stderr). To download it in advance instead, run `npx puppeteer browsers install chrome`. Set the environment variable `PUPPETEER_SKIP_DOWNLOAD=true` to turn the download off.
+Newer npm versions don't run the install scripts of packages, which Puppeteer uses to download Chrome. In that case Chrome is downloaded the first time you save a page (one time, about 200 MB; progress is shown on stderr). If an earlier download was interrupted, the leftover is removed and Chrome is downloaded again. To download it in advance instead, run `npx puppeteer browsers install chrome`. Set the environment variable `PUPPETEER_SKIP_DOWNLOAD=true` to turn the download off.
 
-On Linux (including WSL), Chrome may also need system libraries. If it fails to start because a library such as `libnss3.so` is missing, install them with `sudo npx puppeteer browsers install chrome --install-deps`.
+On Linux (including WSL), Chrome needs some system libraries that aren't always installed. If one is missing, the error shows the command that installs them (it needs `sudo`), for example:
+
+```
+sudo apt-get satisfy -y --no-install-recommends "$(paste -sd, ~/.cache/puppeteer/chrome/linux-<version>/chrome-linux64/deb.deps)"
+```
 
 ## Usage
 

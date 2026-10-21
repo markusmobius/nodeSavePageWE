@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3
+
+### Fixed
+- The automatic Chrome download only downloads Chrome (about 200 MB), not also Puppeteer's chrome-headless-shell (125 MB), which isn't used.
+- A Chrome download that was interrupted earlier no longer blocks the next one: the leftover folder is deleted and Chrome is downloaded again.
+- Chrome can be unpacked without the `unzip` program, which isn't installed on all Linux systems (adds the `yauzl` dependency).
+- If Chrome can't start because system libraries are missing (common on WSL and minimal Linux installs), the error shows the command that installs them.
+
 ## 1.0.2
 
 ### Changed
