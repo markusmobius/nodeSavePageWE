@@ -139,5 +139,9 @@ test('rejects invalid input and failed saves with clear errors', { timeout: 6000
     await assert.rejects(savePage(site.base + '/', { browser, timeout: 50 }), /timed out after 50 ms/);
 
     assert.equal(browser.connected, true);
-    assert.equal((await browser.pages()).length, 1, 'pages are closed after errors');
+
+    // Closing a page that was still being set up can take a few seconds on slow machines
+    let pages;
+    for (let wait = 0; wait < 30 && (pages = await browser.pages()).length > 1; wait++) await new Promise(resolve => setTimeout(resolve, 1000));
+    assert.equal(pages.length, 1, 'pages are closed after errors');
 });

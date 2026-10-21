@@ -27,4 +27,7 @@ jobs:
 
       - run: npm ci
 
+      # Newer npm versions skip Puppeteer's install script, which downloads Chrome
+      - run: npx puppeteer browsers install chrome
+
       - run: npm test
