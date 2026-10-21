@@ -33,6 +33,8 @@ savePage('https://www.nytimes.com', {
     loadLazyContent: false     // true: scroll through the page first so lazy-loaded content is saved
 }).then(result => {
     console.log(`saved ${result.resources} resources, ${result.failed.length} failed`);
+}).catch(error => {
+    console.error(error.message);
 });
 ```
 

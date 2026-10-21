@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4
+
+### Fixed
+- Clearer output when Chrome has to be set up: the error messages for a missing Chrome or missing system libraries are only the explanation and the command to run (Puppeteer's original error is still available as `error.puppeteerError`), and Puppeteer's confusing "Skipping ... download" notes are hidden.
+- The README's usage example handles errors, so failures print just the message.
+
 ## 1.0.3
 
 ### Fixed
