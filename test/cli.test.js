@@ -15,8 +15,12 @@ before(async () => { site = await startFixture(); });
 after(async () => { await site?.close(); });
 
 function run(...args) {
+    return runWithEnv({}, ...args);
+}
+
+function runWithEnv(env, ...args) {
     return new Promise(resolve => {
-        execFile(process.execPath, [BIN, ...args], { maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+        execFile(process.execPath, [BIN, ...args], { maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ...env } }, (error, stdout, stderr) => {
             resolve({ code: error ? error.code : 0, stdout, stderr });
         });
     });
@@ -70,4 +74,19 @@ test('exits with code 1 when the save fails', async () => {
 
     assert.equal(code, 1);
     assert.match(stderr, /savepagewe: /);
+});
+
+test('explains how to install Chrome when it is missing', async () => {
+    // An empty Puppeteer cache folder looks like an install where npm skipped Puppeteer's Chrome download
+    const emptyCache = fs.mkdtempSync(path.join(os.tmpdir(), 'save-page-we-no-chrome-'));
+    try {
+        const { code, stderr } = await runWithEnv({ PUPPETEER_CACHE_DIR: emptyCache, PUPPETEER_EXECUTABLE_PATH: '' }, site.base + '/nested');
+
+        assert.equal(code, 1);
+        assert.match(stderr, /Chrome for Puppeteer is not installed/);
+        assert.match(stderr, /npx puppeteer browsers install chrome/);
+    }
+    finally {
+        fs.rmSync(emptyCache, { recursive: true, force: true });
+    }
 });

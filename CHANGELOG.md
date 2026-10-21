@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+### Fixed
+- When Chrome for Puppeteer is missing, the error now explains how to install it (`npx puppeteer browsers install chrome`). Newer npm versions don't run the install scripts of packages, which Puppeteer uses to download Chrome. The README's Installation section explains this too.
+
 ## 1.0.0
 
 First release as the npm package `save-page-we` (previously used from the GitHub repository `nodeSavePageWE`).
